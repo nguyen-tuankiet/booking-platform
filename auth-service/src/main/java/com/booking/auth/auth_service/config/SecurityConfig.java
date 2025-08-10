@@ -68,6 +68,7 @@ public class SecurityConfig {
                         .requestMatchers("/auth/forgot-password", "/auth/reset-password/**").permitAll()
                         .requestMatchers("/auth/check-username/**", "/auth/check-email/**").permitAll()
 
+                        .requestMatchers("/users/**").permitAll()
                         // Documentation and monitoring
                         .requestMatchers("/swagger-ui/**", "/api-docs/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()

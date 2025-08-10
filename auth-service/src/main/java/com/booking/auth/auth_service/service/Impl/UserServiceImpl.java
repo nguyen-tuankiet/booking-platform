@@ -1,6 +1,8 @@
 package com.booking.auth.auth_service.service.Impl;
 
 import com.booking.auth.auth_service.dto.request.ChangePasswordRequest;
+import com.booking.auth.auth_service.dto.request.UpdateProfileRequest;
+import com.booking.auth.auth_service.dto.request.UpdateUserStatusRequest;
 import com.booking.auth.auth_service.dto.respone.UserResponse;
 import com.booking.auth.auth_service.entity.User;
 import com.booking.auth.auth_service.entity.VerificationToken;
@@ -14,6 +16,7 @@ import com.booking.auth.auth_service.utils.UserStatus;
 import com.booking.common_library.dto.PageResponse;
 import com.booking.common_library.exception.BusinessException;
 import com.booking.common_library.exception.ResourceNotFoundException;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
@@ -25,6 +28,7 @@ import org.springframework.stereotype.Service;
 
 import java.awt.print.Pageable;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -86,6 +90,35 @@ public class UserServiceImpl implements UserService {
         return mapToPageResponse(users);
     }
 
+    @Override
+    public UserResponse updateProfile(UpdateProfileRequest request) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
+
+        User user = userRepository.findById(userPrincipal.getId()) .orElseThrow(() -> new ResourceNotFoundException("User", "id", userPrincipal.getId()));
+
+        if (request.getFirstName() != null) {
+            user.setFirstName(request.getFirstName());
+        }
+        if (request.getLastName() != null) {
+            user.setLastName(request.getLastName());
+        }
+        if (request.getPhoneNumber() != null) {
+            user.setPhoneNumber(request.getPhoneNumber());
+        }
+        if (request.getAvatar() != null) {
+            user.setAvatar(request.getAvatar());
+        }
+        if (request.getEmail() != null) {
+            user.setEmail(request.getEmail());
+        }
+        user = userRepository.save(user);
+        log.info("Profile updated for user: {}", user.getUsername());
+
+        return mapToUserResponse(user);
+
+    }
+
 
     @Override
     public void changePassword(ChangePasswordRequest request) {
@@ -112,6 +145,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public void verifyEmail(String token) {
         VerificationToken verificationToken = verificationTokenRepository.findByToken(token)
                 .orElseThrow(() -> new BusinessException("Invalid verification token", "INVALID_VERIFICATION_TOKEN"));
@@ -127,12 +161,13 @@ public class UserServiceImpl implements UserService {
         }
         userRepository.save(user);
 
-        verificationTokenRepository.markTokenAsUsed(token, LocalDateTime.now());
+        verificationTokenRepository.deleteByUserAndType(user, VerificationToken.TokenType.EMAIL_VERIFICATION);
 
         log.info("Email verified for user: {}", user.getUsername());
     }
 
     @Override
+    @Transactional
     public void resendEmailVerification() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
@@ -143,8 +178,7 @@ public class UserServiceImpl implements UserService {
         if (user.isEmailVerified()) {
             throw new BusinessException("Email is already verified", "EMAIL_ALREADY_VERIFIED");
         }
-
-        verificationTokenRepository.deleteByUser(user);
+        verificationTokenRepository.deleteByUserAndType(user, VerificationToken.TokenType.EMAIL_VERIFICATION);
 
         String token = UUID.randomUUID().toString();
         LocalDateTime expiryDate = LocalDateTime.now().plusDays(1);
@@ -163,6 +197,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public boolean isUsernameAvailable(String username) {
         return !userRepository.existsByUsername(username);
     }
@@ -173,6 +208,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public void deactivateAccount() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
@@ -205,6 +241,13 @@ public class UserServiceImpl implements UserService {
         verificationTokenRepository.deleteByUser(user);
 
         log.info("Account deleted for user: {}", user.getUsername());
+    }
+
+    @Override
+    public void updateUserStatus(UpdateUserStatusRequest request) {
+        User user = userRepository.findById(request.getUserId()) .orElseThrow(() -> new ResourceNotFoundException("User", "id", request.getUserId()));;
+        user.setUserStatus(request.getStatus());
+        userRepository.save(user);
     }
 
     private UserResponse mapToUserResponse(User user) {

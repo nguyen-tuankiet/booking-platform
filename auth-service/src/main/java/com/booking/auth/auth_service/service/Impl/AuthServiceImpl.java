@@ -90,13 +90,15 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new BusinessException("Default role not found", "ROLE_NOT_FOUND"));
         user.setRoles(Set.of(userRole));
         user = userRepository.save(user);
+
+        emailService.sendWelcomeEmail(user.getEmail(), user.getFirstName());
         sendEmailVerification(user);
         UserPrincipal userPrincipal = UserPrincipal.create(user);
         String accessToken = jwtUtils.generateAccessToken(userPrincipal);
-//        String refreshToken = createRefreshToken(user, request.getDeviceInfo());
+        String refreshToken = createRefreshToken(user, request.getDeviceInfo());
         return AuthResponse.builder()
                 .accessToken(accessToken)
-//                .refreshToken(refreshToken)
+                .refreshToken(refreshToken)
                 .expiresIn(jwtUtils.getTokenExpirationTime())
                 .user(mapToUserResponse(user))
                 .build();
@@ -108,11 +110,10 @@ public class AuthServiceImpl implements AuthService {
         log.info("User login attempt: {}", request.getUsernameOrEmail());
         User user = userRepository.findByUsernameOrEmail(request.getUsernameOrEmail(), request.getUsernameOrEmail())
                 .orElseThrow(() -> new BadCredentialsException("Invalid username or password"));
-        
         if (!user.isAccountNonLocked()) {
             throw new BusinessException("Account is temporarily locked", "ACCOUNT_LOCKED");
         }
-        
+
         if (user.getUserStatus() != UserStatus.ACTIVE) {
             String statusMessage = switch (user.getUserStatus()) {
                 case PENDING -> "Account is pending verification. Please check your email and verify your account.";
@@ -123,7 +124,7 @@ public class AuthServiceImpl implements AuthService {
             };
             throw new BusinessException(statusMessage, "ACCOUNT_NOT_ACTIVE");
         }
-        
+
         try {
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.getUsernameOrEmail(), request.getPassword())
@@ -187,6 +188,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional
     public void sendPasswordResetEmail(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
@@ -240,7 +242,6 @@ public class AuthServiceImpl implements AuthService {
         UserPrincipal userPrincipal = UserPrincipal.create(user);
         String tokenValue = jwtUtils.generateRefreshToken(userPrincipal);
         LocalDateTime expiryDate = LocalDateTime.now().plusNanos(jwtUtils.getRefreshTokenExpirationTime() * 1_000_000);
-
         RefreshToken refreshToken = RefreshToken.builder()
                 .token(tokenValue)
                 .user(user)
@@ -248,7 +249,6 @@ public class AuthServiceImpl implements AuthService {
                 .deviceInfo(deviceInfo)
                 .ipAddress(ipAddress)
                 .build();
-
         refreshTokenRepository.save(refreshToken);
         return tokenValue;
     }

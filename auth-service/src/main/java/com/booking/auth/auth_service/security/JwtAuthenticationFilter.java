@@ -17,8 +17,6 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
 
 @Slf4j
 @Component
@@ -27,28 +25,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtConfig jwtConfig;
     private final CustomUserDetailsService customUserDetailsService;
 
-    private static final List<String> PUBLIC_ENDPOINTS = Arrays.asList(
-            "/auth/register",
-            "/auth/login", 
-            "/auth/logout",
-            "/auth/refresh-token",
-            "/auth/verify-email",
-            "/auth/resend-verification",
-            "/auth/forgot-password",
-            "/auth/reset-password",
-            "/auth/check-username",
-            "/auth/check-email",
-            "/swagger-ui",
-            "/api-docs",
-            "/actuator",
-            "/h2-console"
-    );
-
-    @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
-        String path = request.getServletPath();
-        return PUBLIC_ENDPOINTS.stream().anyMatch(path::startsWith);
-    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
@@ -64,8 +40,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             }
         }catch (Exception e){
-            log.error("Error processing JWT token: {}", e.getMessage());
-            // Không throw exception, chỉ log và tiếp tục
+            log.error(e.getMessage());
         }
         filterChain.doFilter(request, response);
     }

@@ -1,6 +1,8 @@
 package com.booking.auth.auth_service.service;
 
 import com.booking.auth.auth_service.dto.request.ChangePasswordRequest;
+import com.booking.auth.auth_service.dto.request.UpdateProfileRequest;
+import com.booking.auth.auth_service.dto.request.UpdateUserStatusRequest;
 import com.booking.auth.auth_service.dto.respone.UserResponse;
 import com.booking.auth.auth_service.utils.UserStatus;
 import com.booking.common_library.dto.PageResponse;
@@ -22,6 +24,9 @@ public interface UserService {
     PageResponse<UserResponse> getUsersByStatus(UserStatus status, Pageable pageable);
 
     @Transactional
+    UserResponse updateProfile(UpdateProfileRequest request);
+
+    @Transactional
     void changePassword(ChangePasswordRequest request);
 
     @Transactional
@@ -39,4 +44,8 @@ public interface UserService {
 
     @Transactional
     void deleteAccount();
+
+    @Transactional
+    void updateUserStatus(UpdateUserStatusRequest request);
+
 }

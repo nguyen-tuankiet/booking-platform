@@ -6,4 +6,12 @@ public interface EmailService {
     void sendWelcomeEmail(String toEmail, String firstName);
     void sendAccountLockNotification(String toEmail, String firstName);
     void sendPasswordChangeNotification(String toEmail, String firstName);
+
+    void sendBookingConfirmationEmail(String toEmail, String firstName, String bookingReference,
+                                      String flightNumber, String route, String departureTime,
+                                      String totalAmount, String seatNumbers);
+
+    void sendBookingCancellationEmail(String toEmail, String firstName, String bookingReference,
+                                      String flightNumber, String route, String departureTime,
+                                      String cancellationReason);
 }

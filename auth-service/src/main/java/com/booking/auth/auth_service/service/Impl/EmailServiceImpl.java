@@ -144,6 +144,88 @@ public class EmailServiceImpl implements EmailService {
         }
     }
 
+    @Override
+    @Async
+    public void sendBookingConfirmationEmail(String toEmail, String firstName, String bookingReference,
+                                             String flightNumber, String route, String departureTime,
+                                             String totalAmount, String seatNumbers) {
+        try {
+            String subject = "Booking Confirmation - " + bookingReference + " - " + appName;
+            String bookingUrl = frontendUrl + "/bookings/" + bookingReference;
+
+            String body = String.format(
+                    "Dear %s,\n\n" +
+                            "Great news! Your flight booking has been confirmed.\n\n" +
+                            "BOOKING DETAILS:\n" +
+                            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+                            "Booking Reference: %s\n" +
+                            "Flight: %s\n" +
+                            "Route: %s\n" +
+                            "Departure: %s\n" +
+                            "Seat(s): %s\n" +
+                            "Total Amount: $%s\n" +
+                            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
+                            "NEXT STEPS:\n" +
+                            "• Check-in online 24 hours before departure\n" +
+                            "• Arrive at the airport at least 2 hours before domestic flights (3 hours for international)\n" +
+                            "• Bring a valid ID/passport and your booking reference\n\n" +
+                            "View your complete booking details: %s\n\n" +
+                            "Have a wonderful trip!\n\n" +
+                            "Best regards,\n" +
+                            "The %s Team\n\n" +
+                            "Need help? Contact our support team 24/7.",
+                    firstName, bookingReference, flightNumber, route, departureTime,
+                    seatNumbers, totalAmount, bookingUrl, appName
+            );
+
+            sendSimpleEmail(toEmail, subject, body);
+            log.info("Booking confirmation email sent to: {} for booking: {}", toEmail, bookingReference);
+        } catch (Exception e) {
+            log.error("Failed to send booking confirmation email to: {} for booking: {}", toEmail, bookingReference, e);
+        }
+    }
+
+    @Override
+    @Async
+    public void sendBookingCancellationEmail(String toEmail, String firstName, String bookingReference,
+                                             String flightNumber, String route, String departureTime,
+                                             String cancellationReason) {
+        try {
+            String subject = "Booking Cancelled - " + bookingReference + " - " + appName;
+
+            String body = String.format(
+                    "Dear %s,\n\n" +
+                            "We're sorry to confirm that your flight booking has been cancelled.\n\n" +
+                            "CANCELLED BOOKING DETAILS:\n" +
+                            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+                            "Booking Reference: %s\n" +
+                            "Flight: %s\n" +
+                            "Route: %s\n" +
+                            "Original Departure: %s\n" +
+                            "Cancellation Reason: %s\n" +
+                            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
+                            "REFUND INFORMATION:\n" +
+                            "If you paid for this booking, your refund will be processed according to our refund policy.\n" +
+                            "Refunds typically take 5-10 business days to appear on your statement.\n\n" +
+                            "NEED HELP?\n" +
+                            "• Book a new flight: %s/search\n" +
+                            "• Contact our support team for assistance\n" +
+                            "• Check our refund policy: %s/refund-policy\n\n" +
+                            "We apologize for any inconvenience caused and appreciate your understanding.\n\n" +
+                            "Best regards,\n" +
+                            "The %s Team",
+                    firstName, bookingReference, flightNumber, route, departureTime,
+                    cancellationReason != null ? cancellationReason : "Requested by passenger",
+                    frontendUrl, frontendUrl, appName
+            );
+
+            sendSimpleEmail(toEmail, subject, body);
+            log.info("Booking cancellation email sent to: {} for booking: {}", toEmail, bookingReference);
+        } catch (Exception e) {
+            log.error("Failed to send booking cancellation email to: {} for booking: {}", toEmail, bookingReference, e);
+        }
+    }
+
     private void sendSimpleEmail(String toEmail, String subject, String body) {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(fromEmail);

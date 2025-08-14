@@ -37,13 +37,6 @@ public class RedisConfig {
                 .registerModule(new JavaTimeModule()) // hỗ trợ Java 8 date/time
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS); // serialize dạng ISO-8601
 
-        RedisTemplate<String, Object> template = getStringObjectRedisTemplate(connectionFactory, objectMapper);
-
-        template.afterPropertiesSet();
-        return template;
-    }
-
-    private static RedisTemplate<String, Object> getStringObjectRedisTemplate(RedisConnectionFactory connectionFactory, ObjectMapper objectMapper) {
         GenericJackson2JsonRedisSerializer serializer = new GenericJackson2JsonRedisSerializer(objectMapper);
 
         RedisTemplate<String, Object> template = new RedisTemplate<>();
@@ -56,6 +49,8 @@ public class RedisConfig {
         // Value và Hash Value
         template.setValueSerializer(serializer);
         template.setHashValueSerializer(serializer);
+
+        template.afterPropertiesSet();
         return template;
     }
 }

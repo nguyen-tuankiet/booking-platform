@@ -1,149 +1,189 @@
 package com.booking.booking_service.service.Impl;
 
 import com.booking.booking_service.dto.request.BookingRequest;
-import com.booking.booking_service.dto.request.ContactRequest;
-import com.booking.booking_service.dto.request.PassengerRequest;
 import com.booking.booking_service.dto.request.SeatSelectionRequest;
+import com.booking.booking_service.dto.request.PassengerRequest;
 import com.booking.booking_service.dto.respone.BookingResponse;
-import com.booking.booking_service.entity.*;
+import com.booking.booking_service.entity.Booking;
+import com.booking.booking_service.entity.Flight;
+import com.booking.booking_service.entity.SeatLock;
+import com.booking.booking_service.entity.PassengerInfo;
 import com.booking.booking_service.repository.BookingRepository;
-import com.booking.booking_service.repository.FlightRepository;
-import com.booking.booking_service.security.UserPrincipal;
-import com.booking.booking_service.service.BookingService;
-import com.booking.booking_service.service.FlightService;
-import com.booking.booking_service.service.SeatLockService;
+import com.booking.booking_service.service.*;
 import com.booking.booking_service.utils.BookingStatus;
-import com.booking.booking_service.utils.FlightStatus;
 import com.booking.booking_service.utils.PaymentStatus;
 import com.booking.common_library.dto.PageResponse;
-import com.booking.common_library.exception.BusinessException;
+import com.booking.common_library.entity.booking_event.BookingCancelledEvent;
+import com.booking.common_library.entity.booking_event.BookingConfirmedEvent;
+import com.booking.common_library.entity.booking_event.BookingCreatedEvent;
+import com.booking.common_library.entity.booking_event.BookingExpiredEvent;
 import com.booking.common_library.exception.ResourceNotFoundException;
-import jakarta.transaction.Transactional;
+import com.booking.common_library.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class BookingServiceImpl implements BookingService {
-    private final BookingRepository bookingRepository;
-    private final FlightRepository flightRepository;
-    private final SeatLockService seatLockService;
-    private final FlightService flightService;
-    private final RedisTemplate<String, Object> redisTemplate;
-    private final ModelMapper modelMapper;
 
-    private static final String BOOKING_CACHE_PREFIX = "booking:";
-    private static final String USER_BOOKINGS_PREFIX = "user_bookings:";
+    private final BookingRepository bookingRepository;
+    private final FlightService flightService;
+    private final SeatLockService seatLockService;
+    private final EmailNotificationService emailNotificationService;
+    private final BookingEventPublisher eventPublisher;
 
     @Override
     @Transactional
     public BookingResponse createBooking(BookingRequest request) {
-        Long userId = getCurrentUserId();
-        log.info("Creating booking for user {} on flight {}", userId, request.getFlightId());
+        log.info("Creating booking for flight: {} with {} passengers",
+                request.getFlightId(), request.getPassengers().size());
 
-        // Validate flight existence và availability
-        Flight flight = validateFlightForBooking(request.getFlightId());
+        try {
+            // Validate flight exists and is available
+            var flightResponse = flightService.getFlightById(request.getFlightId());
 
-        // Validate seat selection
-        validateSeatSelection(request);
+            // Check seat availability
+            if (!flightService.isSeatsAvailable(request.getFlightId(), request.getSelectedSeats())) {
+                throw new BusinessException("Selected seats are not available");
+            }
 
-        // Kiểm tra user có đang lock các ghế này không
-        validateUserSeatLocks(request.getFlightId(), request.getSelectedSeats(), userId);
+            // Get current user
+            Long userId = getCurrentUserId();
 
-        // Tính tổng tiền
-        BigDecimal totalAmount = calculateTotalAmount(flight, request);
+            // Check if user already has locked seats for this flight
+            if (seatLockService.hasUserLockedSeats(request.getFlightId(), userId)) {
+                List<String> lockedSeats = seatLockService.getUserLockedSeats(request.getFlightId(), userId);
+                log.warn("User {} already has locked seats {} for flight {}", userId, lockedSeats, request.getFlightId());
+                throw new BusinessException("You already have seats locked for this flight. Please complete or cancel your existing booking.");
+            }
 
-        // Tạo booking reference
-        String bookingReference = generateBookingReference();
+            // Calculate total amount based on seat class and number of seats
+            BigDecimal totalAmount = calculateTotalAmount(flightResponse, request.getSeatClass(), request.getSelectedSeats().size());
 
-        // Tạo booking entity
-        Booking booking = Booking.builder()
-                .bookingReference(bookingReference)
-                .userId(userId)
-                .flightId(request.getFlightId())
-                .passengers(convertPassengers(request.getPassengers()))
-                .selectedSeats(request.getSelectedSeats())
-                .seatClass(request.getSeatClass())
-                .totalAmount(totalAmount)
-                .bookingStatus(BookingStatus.LOCKED)
-                .paymentStatus(PaymentStatus.PENDING)
-                .contactInfo(convertContactInfo(request.getContactInfo()))
-                .specialRequests(request.getSpecialRequests())
-                .lockExpiresAt(LocalDateTime.now().plusMinutes(15)) // 15 phút để thanh toán
-                .build();
+            // Map contact info
+            var contactInfo = com.booking.booking_service.entity.ContactInfo.builder()
+                    .email(request.getContactInfo().getEmail())
+                    .phoneNumber(request.getContactInfo().getPhoneNumber())
+                    .emergencyContact(request.getContactInfo().getEmergencyContact())
+                    .emergencyPhone(request.getContactInfo().getEmergencyPhone())
+                    .build();
 
-        booking = bookingRepository.save(booking);
+            // Create booking entity
+            Booking booking = Booking.builder()
+                    .id(generateBookingId())
+                    .bookingReference(generateBookingReference())
+                    .userId(userId)
+                    .flightId(request.getFlightId())
+                    .passengers(mapPassengers(request.getPassengers()))
+                    .selectedSeats(request.getSelectedSeats())
+                    .seatClass(request.getSeatClass())
+                    .totalAmount(totalAmount)
+                    .bookingStatus(BookingStatus.LOCKED)
+                    .paymentStatus(PaymentStatus.PENDING)
+                    .contactInfo(contactInfo)
+                    .specialRequests(request.getSpecialRequests())
+                    .lockExpiresAt(LocalDateTime.now().plusMinutes(15))
+                    .build();
 
-        // Confirm seat locks với booking ID
-        seatLockService.confirmSeatLocks(request.getFlightId(), request.getSelectedSeats(), userId, booking.getId());
+            // Save booking
+            booking = bookingRepository.save(booking);
+            log.info("Booking created with ID: {} and reference: {}", booking.getId(), booking.getBookingReference());
 
-        // Invalidate cache
-        invalidateUserBookingsCache(userId);
+            // Lock seats
+            String sessionId = UUID.randomUUID().toString();
+            List<SeatLock> seatLocks = seatLockService.lockSeats(
+                    request.getFlightId(),
+                    request.getSelectedSeats(),
+                    userId,
+                    sessionId
+            );
+            log.info("Locked {} seats for booking: {}", seatLocks.size(), booking.getId());
 
-        log.info("Successfully created booking {} for user {}", bookingReference, userId);
-        return convertToBookingResponse(booking, flight);
+            // Update flight available seats
+            flightService.updateAvailableSeats(request.getFlightId(), request.getSelectedSeats().size(), false);
+
+            // Publish booking created event
+            BookingCreatedEvent event = BookingCreatedEvent.builder()
+                    .bookingId(booking.getId())
+                    .bookingReference(booking.getBookingReference())
+                    .userId(booking.getUserId())
+                    .flightId(booking.getFlightId())
+                    .seatNumbers(booking.getSelectedSeats())
+                    .totalAmount(booking.getTotalAmount())
+                    .currency("VND")
+                    .createdAt(booking.getCreatedAt())
+                    .passengerEmail(booking.getContactInfo() != null ? booking.getContactInfo().getEmail() : null)
+                    .passengerPhone(booking.getContactInfo() != null ? booking.getContactInfo().getPhoneNumber() : null)
+                    .build();
+
+            eventPublisher.publishBookingCreated(event);
+
+            // Send confirmation email
+            try {
+                Flight flight = convertToFlightEntity(flightResponse);
+                emailNotificationService.sendBookingConfirmationEmail(booking, flight);
+            } catch (Exception e) {
+                log.error("Failed to send booking confirmation email", e);
+                // Don't fail the booking creation if email fails
+            }
+
+            log.info("Booking created successfully: {}", booking.getId());
+
+            return convertToBookingResponse(booking);
+
+        } catch (Exception e) {
+            log.error("Failed to create booking for flight: {}", request.getFlightId(), e);
+            throw e;
+        }
     }
 
     @Override
     @Transactional
     public List<SeatLock> selectSeats(SeatSelectionRequest request) {
-        Long userId = getCurrentUserId();
-        log.info("User {} selecting seats {} for flight {}", userId, request.getSeatNumbers(), request.getFlightId());
+        log.info("Selecting seats {} for flight: {}", request.getSeatNumbers(), request.getFlightId());
 
-        // Validate flight
-        Flight flight = flightRepository.findById(request.getFlightId())
-                .orElseThrow(() -> new ResourceNotFoundException("Flight", "id", request.getFlightId()));
+        // Validate flight exists
+        flightService.getFlightById(request.getFlightId());
 
-        // Validate seat availability
+        // Check seat availability
         if (!flightService.isSeatsAvailable(request.getFlightId(), request.getSeatNumbers())) {
             throw new BusinessException("One or more selected seats are not available");
         }
 
-        // Release existing locks của user trên flight này
+        Long userId = getCurrentUserId();
+        String sessionId = UUID.randomUUID().toString();
+
+        // Release any existing locks for this user on this flight
         seatLockService.releaseUserLocks(request.getFlightId(), userId);
 
-        // Lock ghế mới
-        return seatLockService.lockSeats(request.getFlightId(), request.getSeatNumbers(),
-                userId, request.getSessionId());
+        // Lock the new seats
+        return seatLockService.lockSeats(request.getFlightId(), request.getSeatNumbers(), userId, sessionId);
     }
 
     @Override
-    @Transactional
     public PageResponse<BookingResponse> getUserBookings(Pageable pageable) {
         Long userId = getCurrentUserId();
         log.info("Getting bookings for user: {}", userId);
 
-        // Kiểm tra cache
-        String cacheKey = USER_BOOKINGS_PREFIX + userId + ":" + pageable.toString();
-        @SuppressWarnings("unchecked")
-        PageResponse<BookingResponse> cachedResult = (PageResponse<BookingResponse>) redisTemplate.opsForValue().get(cacheKey);
-        if (cachedResult != null) {
-            return cachedResult;
-        }
-
         Page<Booking> bookingPage = bookingRepository.findByUserId(userId, pageable);
 
         List<BookingResponse> bookingResponses = bookingPage.getContent().stream()
-                .map(booking -> {
-                    Flight flight = flightRepository.findById(booking.getFlightId()).orElse(null);
-                    return convertToBookingResponse(booking, flight);
-                })
+                .map(this::convertToBookingResponse)
                 .toList();
 
-        PageResponse<BookingResponse> result = PageResponse.<BookingResponse>builder()
+        return PageResponse.<BookingResponse>builder()
                 .content(bookingResponses)
                 .page(bookingPage.getNumber())
                 .size(bookingPage.getSize())
@@ -152,74 +192,107 @@ public class BookingServiceImpl implements BookingService {
                 .first(bookingPage.isFirst())
                 .last(bookingPage.isLast())
                 .build();
+    }
 
-        // Cache 5 phút
-        redisTemplate.opsForValue().set(cacheKey, result, 5, TimeUnit.MINUTES);
-        return result;
+    @Override
+    public BookingResponse getBookingById(String bookingId) {
+        log.info("Getting booking by ID: {}", bookingId);
+
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking not found: " + bookingId));
+
+        // Check if user owns this booking
+        Long currentUserId = getCurrentUserId();
+        if (!booking.getUserId().equals(currentUserId)) {
+            throw new BusinessException("Access denied: You don't have permission to view this booking");
+        }
+
+        return convertToBookingResponse(booking);
     }
 
     @Override
     public BookingResponse getBookingByReference(String bookingReference) {
         log.info("Getting booking by reference: {}", bookingReference);
 
-        String cacheKey = BOOKING_CACHE_PREFIX + "ref:" + bookingReference;
-        BookingResponse cachedBooking = (BookingResponse) redisTemplate.opsForValue().get(cacheKey);
-        if (cachedBooking != null) {
-            return cachedBooking;
-        }
-
         Booking booking = bookingRepository.findByBookingReference(bookingReference)
-                .orElseThrow(() -> new ResourceNotFoundException("Booking", "reference", bookingReference));
+                .orElseThrow(() -> new ResourceNotFoundException("Booking not found: " + bookingReference));
 
-        // Kiểm tra quyền truy cập
+        // Check if user owns this booking
         Long currentUserId = getCurrentUserId();
-        if (!booking.getUserId().equals(currentUserId) && !isAdmin()) {
-            throw new BusinessException("Access denied to this booking");
+        if (!booking.getUserId().equals(currentUserId)) {
+            throw new BusinessException("Access denied: You don't have permission to view this booking");
         }
 
-        Flight flight = flightRepository.findById(booking.getFlightId()).orElse(null);
-        BookingResponse response = convertToBookingResponse(booking, flight);
-
-        // Cache 10 phút
-        redisTemplate.opsForValue().set(cacheKey, response, 10, TimeUnit.MINUTES);
-        return response;
+        return convertToBookingResponse(booking);
     }
 
     @Override
     @Transactional
     public void cancelBooking(String bookingId, String reason) {
-        Long userId = getCurrentUserId();
-        log.info("User {} cancelling booking {}", userId, bookingId);
+        log.info("Cancelling booking: {} with reason: {}", bookingId, reason);
 
         Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new ResourceNotFoundException("Booking", "id", bookingId));
+                .orElseThrow(() -> new ResourceNotFoundException("Booking not found: " + bookingId));
 
-        // Kiểm tra quyền hủy
-        if (!booking.getUserId().equals(userId) && !isAdmin()) {
-            throw new BusinessException("Access denied to cancel this booking");
+        // Check if user owns this booking
+        Long currentUserId = getCurrentUserId();
+        if (!booking.getUserId().equals(currentUserId)) {
+            throw new BusinessException("Access denied: You don't have permission to cancel this booking");
         }
 
-        // Kiểm tra trạng thái có thể hủy
-        if (booking.getBookingStatus() == BookingStatus.CANCELLED ||
-                booking.getBookingStatus() == BookingStatus.COMPLETED) {
-            throw new BusinessException("Cannot cancel booking in current status");
+        // Check if booking can be cancelled
+        if (booking.getBookingStatus() == BookingStatus.CANCELLED || booking.getBookingStatus() == BookingStatus.EXPIRED) {
+            throw new BusinessException("Booking is already cancelled or expired");
         }
 
-        // Update booking status
-        booking.setBookingStatus(BookingStatus.CANCELLED);
-        booking.setCancelledAt(LocalDateTime.now());
-        booking.setCancellationReason(reason);
-        booking.setUpdatedAt(LocalDateTime.now());
+        if (booking.getBookingStatus() == BookingStatus.CONFIRMED && booking.getPaymentStatus() == PaymentStatus.COMPLETED) {
+            // This is a paid booking, requires refund
+            booking.setBookingStatus(BookingStatus.CANCELLED);
+            booking.setCancellationReason(reason);
+            booking.setCancelledAt(LocalDateTime.now());
+        } else {
+            // Unpaid booking, can be cancelled directly
+            booking.setBookingStatus(BookingStatus.CANCELLED);
+            booking.setCancellationReason(reason);
+            booking.setCancelledAt(LocalDateTime.now());
+        }
 
-        bookingRepository.save(booking);
+        booking = bookingRepository.save(booking);
 
-        // Release seats về available pool
+        // Release seat locks
+        seatLockService.releaseUserLocks(booking.getFlightId(), booking.getUserId());
+
+        // Update flight available seats
         flightService.updateAvailableSeats(booking.getFlightId(), booking.getSelectedSeats().size(), true);
 
-        // Invalidate caches
-        invalidateBookingCaches(booking);
+        // Determine if refund is required
+        boolean refundRequired = booking.getPaymentStatus() == PaymentStatus.COMPLETED;
 
-        log.info("Successfully cancelled booking {}", bookingId);
+        // Publish booking cancelled event
+        BookingCancelledEvent event = BookingCancelledEvent.builder()
+                .bookingId(booking.getId())
+                .bookingReference(booking.getBookingReference())
+                .userId(booking.getUserId())
+                .flightId(booking.getFlightId())
+                .seatNumbers(booking.getSelectedSeats())
+                .cancellationReason(reason)
+                .cancelledAt(LocalDateTime.now())
+                .refundRequired(refundRequired)
+                .transactionId(null)
+                .build();
+
+        eventPublisher.publishBookingCancelled(event);
+
+        // Send cancellation email
+        try {
+            var flightResponse = flightService.getFlightById(booking.getFlightId());
+            Flight flight = convertToFlightEntity(flightResponse);
+            emailNotificationService.sendBookingCancellationEmail(booking, flight, reason);
+        } catch (Exception e) {
+            log.error("Failed to send booking cancellation email", e);
+        }
+
+        log.info("Booking cancelled successfully: {}", bookingId);
     }
 
     @Override
@@ -228,23 +301,43 @@ public class BookingServiceImpl implements BookingService {
         log.info("Confirming booking: {}", bookingId);
 
         Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new ResourceNotFoundException("Booking", "id", bookingId));
+                .orElseThrow(() -> new ResourceNotFoundException("Booking not found: " + bookingId));
 
-        if (booking.getBookingStatus() != BookingStatus.LOCKED) {
-            throw new BusinessException("Cannot confirm booking in current status");
+        if (booking.getBookingStatus() == BookingStatus.CONFIRMED || booking.getBookingStatus() == BookingStatus.CANCELLED || booking.getBookingStatus() == BookingStatus.EXPIRED) {
+            log.warn("Booking {} cannot be confirmed from current status: {}", bookingId, booking.getBookingStatus());
+            return;
         }
 
+        // Confirm booking
         booking.setBookingStatus(BookingStatus.CONFIRMED);
         booking.setPaymentStatus(PaymentStatus.COMPLETED);
         booking.setConfirmedAt(LocalDateTime.now());
-        booking.setUpdatedAt(LocalDateTime.now());
 
-        assignSeatsToPassengers(booking);
-        bookingRepository.save(booking);
-        flightService.updateAvailableSeats(booking.getFlightId(), booking.getSelectedSeats().size(), false);
-        invalidateBookingCaches(booking);
+        booking = bookingRepository.save(booking);
 
-        log.info("Successfully confirmed booking {}", bookingId);
+        // Confirm seat locks (convert to permanent bookings)
+        seatLockService.confirmSeatLocks(
+                booking.getFlightId(),
+                booking.getSelectedSeats(),
+                booking.getUserId(),
+                booking.getId()
+        );
+
+        // Publish booking confirmed event
+        BookingConfirmedEvent event = BookingConfirmedEvent.builder()
+                .bookingId(booking.getId())
+                .bookingReference(booking.getBookingReference())
+                .userId(booking.getUserId())
+                .flightId(booking.getFlightId())
+                .seatNumbers(booking.getSelectedSeats())
+                .transactionId(null)
+                .paidAmount(booking.getTotalAmount())
+                .confirmedAt(LocalDateTime.now())
+                .build();
+
+        eventPublisher.publishBookingConfirmed(event);
+
+        log.info("Booking confirmed successfully: {}", bookingId);
     }
 
     @Override
@@ -253,206 +346,144 @@ public class BookingServiceImpl implements BookingService {
         log.info("Expiring booking: {}", bookingId);
 
         Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new ResourceNotFoundException("Booking", "id", bookingId));
+                .orElseThrow(() -> new ResourceNotFoundException("Booking not found: " + bookingId));
 
-        booking.setBookingStatus(BookingStatus.EXPIRED);
-        booking.setUpdatedAt(LocalDateTime.now());
-        bookingRepository.save(booking);
-
-        seatLockService.releaseUserLocks(booking.getFlightId(), booking.getUserId());
-        invalidateBookingCaches(booking);
-    }
-
-    @Override
-    public BookingResponse getBookingById(String bookingId) {
-        Long userId = getCurrentUserId();
-        log.info("Getting booking {} for user {}", bookingId, userId);
-
-        String cacheKey = BOOKING_CACHE_PREFIX + bookingId;
-        BookingResponse cachedBooking = (BookingResponse) redisTemplate.opsForValue().get(cacheKey);
-        if (cachedBooking != null) return cachedBooking;
-
-        Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new ResourceNotFoundException("Booking", "id", bookingId));
-
-        if (!booking.getUserId().equals(userId) && !isAdmin()) {
-            throw new BusinessException("Access denied to this booking");
+        if (booking.getBookingStatus() != BookingStatus.LOCKED) {
+            log.warn("Booking {} is not in PENDING_PAYMENT status, cannot expire", bookingId);
+            return;
         }
 
-        Flight flight = flightRepository.findById(booking.getFlightId()).orElse(null);
-        BookingResponse response = convertToBookingResponse(booking, flight);
+        // Expire booking
+        booking.setBookingStatus(BookingStatus.EXPIRED);
 
-        redisTemplate.opsForValue().set(cacheKey, response, 10, TimeUnit.MINUTES);
-        return response;
+        booking = bookingRepository.save(booking);
+
+        // Release seat locks
+        seatLockService.releaseUserLocks(booking.getFlightId(), booking.getUserId());
+
+        // Update flight available seats
+        flightService.updateAvailableSeats(booking.getFlightId(), booking.getSelectedSeats().size(), true);
+
+        // Publish booking expired event
+        BookingExpiredEvent event = BookingExpiredEvent.builder()
+                .bookingId(booking.getId())
+                .bookingReference(booking.getBookingReference())
+                .userId(booking.getUserId())
+                .flightId(booking.getFlightId())
+                .seatNumbers(booking.getSelectedSeats())
+                .expiredAt(LocalDateTime.now())
+                .reason("Payment timeout")
+                .build();
+
+        eventPublisher.publishBookingExpired(event);
+
+        log.info("Booking expired successfully: {}", bookingId);
     }
 
     @Override
     @Transactional
     public void updateBookingPaymentStatus(String bookingId, PaymentStatus paymentStatus) {
-        log.info("Updating payment status for booking {} to {}", bookingId, paymentStatus);
+        log.info("Updating payment status for booking: {} to {}", bookingId, paymentStatus);
 
         Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new ResourceNotFoundException("Booking", "id", bookingId));
+                .orElseThrow(() -> new ResourceNotFoundException("Booking not found: " + bookingId));
 
         booking.setPaymentStatus(paymentStatus);
-        booking.setUpdatedAt(LocalDateTime.now());
 
         if (paymentStatus == PaymentStatus.COMPLETED) {
             booking.setBookingStatus(BookingStatus.CONFIRMED);
             booking.setConfirmedAt(LocalDateTime.now());
-            assignSeatsToPassengers(booking);
         } else if (paymentStatus == PaymentStatus.FAILED) {
-            booking.setBookingStatus(BookingStatus.EXPIRED);
-            seatLockService.releaseUserLocks(booking.getFlightId(), booking.getUserId());
+            // Keep bookingStatus as LOCKED to allow retry; scheduled job will expire if needed
         }
 
         bookingRepository.save(booking);
-        invalidateBookingCaches(booking);
-    }
-
-    // === Private helper methods ===
-    private Flight validateFlightForBooking(String flightId) {
-        Flight flight = flightRepository.findById(flightId)
-                .orElseThrow(() -> new ResourceNotFoundException("Flight", "id", flightId));
-
-        if (flight.getStatus() != FlightStatus.SCHEDULED) {
-            throw new BusinessException("Flight is not available for booking");
-        }
-
-        if (flight.getAvailableSeats() <= 0) {
-            throw new BusinessException("No available seats on this flight");
-        }
-
-        return flight;
-    }
-
-    private void validateSeatSelection(BookingRequest request) {
-        if (request.getPassengers().size() != request.getSelectedSeats().size()) {
-            throw new BusinessException("Number of passengers must match number of selected seats");
-        }
-    }
-
-    private void validateUserSeatLocks(String flightId, List<String> seatNumbers, Long userId) {
-        List<String> userLockedSeats = seatLockService.getUserLockedSeats(flightId, userId);
-        for (String seatNumber : seatNumbers) {
-            if (!userLockedSeats.contains(seatNumber)) {
-                throw new BusinessException("Seat " + seatNumber + " is not locked by user");
-            }
-        }
-    }
-
-    private BigDecimal calculateTotalAmount(Flight flight, BookingRequest request) {
-        BigDecimal seatPrice = switch (request.getSeatClass().toUpperCase()) {
-            case "BUSINESS" -> flight.getBusinessPrice();
-            case "FIRST" -> flight.getFirstPrice();
-            default -> flight.getBasePrice();
-        };
-        return seatPrice.multiply(BigDecimal.valueOf(request.getPassengers().size()));
-    }
-
-    private String generateBookingReference() {
-        return "BK" + System.currentTimeMillis() + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
-    }
-
-    private List<PassengerInfo> convertPassengers(List<PassengerRequest> passengerRequests) {
-        return passengerRequests.stream()
-                .map(request -> PassengerInfo.builder()
-                        .title(request.getTitle())
-                        .firstName(request.getFirstName())
-                        .lastName(request.getLastName())
-                        .dateOfBirth(request.getDateOfBirth())
-                        .nationality(request.getNationality())
-                        .passportNumber(request.getPassportNumber())
-                        .passportExpiry(request.getPassportExpiry())
-                        .meal(request.getMeal())
-                        .build())
-                .toList();
-    }
-
-    private ContactInfo convertContactInfo(ContactRequest contactRequest) {
-        return ContactInfo.builder()
-                .email(contactRequest.getEmail())
-                .phoneNumber(contactRequest.getPhoneNumber())
-                .emergencyContact(contactRequest.getEmergencyContact())
-                .emergencyPhone(contactRequest.getEmergencyPhone())
-                .build();
-    }
-
-    private BookingResponse convertToBookingResponse(Booking booking, Flight flight) {
-        BookingResponse response = modelMapper.map(booking, BookingResponse.class);
-        if (flight != null) {
-            FlightInfo flightInfo = FlightInfo.builder()
-                    .flightNumber(flight.getFlightNumber())
-                    .airlineName(flight.getAirlineName())
-                    .departureAirport(flight.getDepartureAirport())
-                    .arrivalAirport(flight.getArrivalAirport())
-                    .departureTime(flight.getDepartureTime())
-                    .arrivalTime(flight.getArrivalTime())
-                    .build();
-            response.setFlightInfo(flightInfo);
-        }
-        if (booking.getPassengers() != null) {
-            List<PassengerInfo> passengers = booking.getPassengers().stream()
-                    .map(passenger -> PassengerInfo.builder()
-                            .title(passenger.getTitle())
-                            .firstName(passenger.getFirstName())
-                            .lastName(passenger.getLastName())
-                            .dateOfBirth(passenger.getDateOfBirth())
-                            .nationality(passenger.getNationality())
-                            .passportNumber(passenger.getPassportNumber())
-                            .passportExpiry(passenger.getPassportExpiry())
-                            .seatNumber(passenger.getSeatNumber())
-                            .meal(passenger.getMeal())
-                            .build())
-                    .toList();
-            response.setPassengers(passengers);
-        }
-        if (booking.getContactInfo() != null) {
-            ContactInfo contactInfo = ContactInfo.builder()
-                    .email(booking.getContactInfo().getEmail())
-                    .phoneNumber(booking.getContactInfo().getPhoneNumber())
-                    .emergencyContact(booking.getContactInfo().getEmergencyContact())
-                    .emergencyPhone(booking.getContactInfo().getEmergencyPhone())
-                    .build();
-            response.setContactInfo(contactInfo);
-        }
-        return response;
-    }
-
-    private void assignSeatsToPassengers(Booking booking) {
-        List<PassengerInfo> passengers = booking.getPassengers();
-        List<String> selectedSeats = booking.getSelectedSeats();
-        for (int i = 0; i < passengers.size() && i < selectedSeats.size(); i++) {
-            passengers.get(i).setSeatNumber(selectedSeats.get(i));
-        }
-        booking.setPassengers(passengers);
-    }
-
-    private void invalidateBookingCaches(Booking booking) {
-        redisTemplate.delete(BOOKING_CACHE_PREFIX + booking.getId());
-        redisTemplate.delete(BOOKING_CACHE_PREFIX + "ref:" + booking.getBookingReference());
-        invalidateUserBookingsCache(booking.getUserId());
-    }
-
-    private void invalidateUserBookingsCache(Long userId) {
-        String pattern = USER_BOOKINGS_PREFIX + userId + ":*";
-        redisTemplate.delete(pattern);
+        log.info("Payment status updated for booking: {}", bookingId);
     }
 
     private Long getCurrentUserId() {
-        try {
-            UserPrincipal userPrincipal = (UserPrincipal) SecurityContextHolder.getContext()
-                    .getAuthentication().getPrincipal();
-            return userPrincipal.getId();
-        } catch (Exception e) {
-            return null;
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof org.springframework.security.core.userdetails.User) {
+            // Extract user ID from JWT claims if needed
+            return 1L; // TODO: Extract from JWT token
         }
+        return 1L; // Default for testing
     }
 
-    private boolean isAdmin() {
-        return SecurityContextHolder.getContext().getAuthentication().getAuthorities()
-                .stream()
-                .anyMatch(auth -> auth.getAuthority().equals("ROLE_ADMIN"));
+    private String generateBookingId() {
+        return "BK-" + System.currentTimeMillis();
     }
 
+    private String generateBookingReference() {
+        return "VN" + System.currentTimeMillis();
+    }
+
+    private BookingResponse convertToBookingResponse(Booking booking) {
+        return BookingResponse.builder()
+                .id(booking.getId())
+                .bookingReference(booking.getBookingReference())
+                .userId(booking.getUserId())
+                .flightId(booking.getFlightId())
+                .flightInfo(null)
+                .passengers(booking.getPassengers())
+                .selectedSeats(booking.getSelectedSeats())
+                .seatClass(booking.getSeatClass())
+                .totalAmount(booking.getTotalAmount())
+                .bookingStatus(booking.getBookingStatus())
+                .paymentStatus(booking.getPaymentStatus())
+                .contactInfo(booking.getContactInfo())
+                .specialRequests(booking.getSpecialRequests())
+                .lockExpiresAt(booking.getLockExpiresAt())
+                .confirmedAt(booking.getConfirmedAt())
+                .cancelledAt(booking.getCancelledAt())
+                .cancellationReason(booking.getCancellationReason())
+                .createdAt(booking.getCreatedAt())
+                .updatedAt(booking.getUpdatedAt())
+                .build();
+    }
+
+    private Flight convertToFlightEntity(com.booking.booking_service.dto.respone.FlightResponse flightResponse) {
+        // Convert FlightResponse to Flight entity for email service
+        return Flight.builder()
+                .id(flightResponse.getId())
+                .flightNumber(flightResponse.getFlightNumber())
+                .airlineCode(flightResponse.getAirlineCode())
+                .airlineName(flightResponse.getAirlineName())
+                .departureAirport(flightResponse.getDepartureAirport())
+                .arrivalAirport(flightResponse.getArrivalAirport())
+                .departureTime(flightResponse.getDepartureTime())
+                .arrivalTime(flightResponse.getArrivalTime())
+                .build();
+    }
+
+    private BigDecimal calculateTotalAmount(com.booking.booking_service.dto.respone.FlightResponse flight,
+                                            String seatClass,
+                                            int numberOfSeats) {
+        BigDecimal pricePerSeat;
+        if (seatClass == null) {
+            pricePerSeat = flight.getBasePrice();
+        } else if ("BUSINESS".equalsIgnoreCase(seatClass)) {
+            pricePerSeat = flight.getBusinessPrice() != null ? flight.getBusinessPrice() : flight.getBasePrice();
+        } else if ("FIRST".equalsIgnoreCase(seatClass)) {
+            pricePerSeat = flight.getFirstPrice() != null ? flight.getFirstPrice() : flight.getBasePrice();
+        } else {
+            pricePerSeat = flight.getBasePrice();
+        }
+        return pricePerSeat.multiply(BigDecimal.valueOf(numberOfSeats));
+    }
+
+    private List<PassengerInfo> mapPassengers(List<PassengerRequest> passengerRequests) {
+        return passengerRequests == null ? List.of() : passengerRequests.stream()
+                .map(pr -> PassengerInfo.builder()
+                        .title(pr.getTitle())
+                        .firstName(pr.getFirstName())
+                        .lastName(pr.getLastName())
+                        .dateOfBirth(pr.getDateOfBirth())
+                        .nationality(pr.getNationality())
+                        .passportNumber(pr.getPassportNumber())
+                        .passportExpiry(pr.getPassportExpiry())
+                        .meal(pr.getMeal())
+                        .build())
+                .toList();
+    }
 }

@@ -7,5 +7,6 @@ public enum TransactionStatus {
     FAILED,
     CANCELLED,
     REFUNDED,
-    PARTIAL_REFUND
+    PARTIAL_REFUND,
+    COMPLETED
 }

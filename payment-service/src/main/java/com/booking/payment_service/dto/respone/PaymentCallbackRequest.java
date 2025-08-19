@@ -18,4 +18,5 @@ public class PaymentCallbackRequest {
     String currency;
     String signature;
     Map<String, String> additionalData;
+    
 }

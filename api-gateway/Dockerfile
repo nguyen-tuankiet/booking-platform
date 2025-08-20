@@ -1,28 +1,26 @@
 # Multi-stage build for API Gateway
-FROM openjdk:21-jdk-slim as builder
+FROM eclipse-temurin:21-jdk-alpine AS builder
 
 WORKDIR /app
+
+# Install maven
+RUN apk add --no-cache maven
 
 # Copy entire project root context
 COPY . .
 
-# Make Maven wrapper executable
-RUN chmod +x ./mvnw
-
 # Build common-library first, then api-gateway
-RUN ./mvnw clean install -DskipTests -pl common-library,api-gateway -am
+RUN mvn clean install -DskipTests -pl common-library,api-gateway -am
 
 # Production stage
-FROM openjdk:21-jre-slim
+FROM eclipse-temurin:21-jre-alpine
 
 # Install necessary packages
-RUN apt-get update && \
-    apt-get install -y curl && \
-    rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache curl
 
 # Create application user
-RUN addgroup --system gateway && \
-    adduser --system --group gateway
+RUN addgroup -g 1001 -S gateway && \
+    adduser -u 1001 -S gateway -G gateway
 
 # Set working directory
 WORKDIR /app

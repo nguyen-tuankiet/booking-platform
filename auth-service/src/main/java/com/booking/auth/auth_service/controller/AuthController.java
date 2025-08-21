@@ -25,7 +25,7 @@ import com.booking.auth.auth_service.service.UserService;
 
 @Slf4j
 @RestController
-@RequestMapping("/auth")
+@RequestMapping("/api/auth")
 @RequiredArgsConstructor
 @Tag(name = "Authentication", description = "Authentication and authorization endpoints")
 public class AuthController {

@@ -20,7 +20,7 @@ import java.util.List;
 
 @Slf4j
 @RestController
-@RequestMapping("/seats")
+@RequestMapping("/api/seats")
 @RequiredArgsConstructor
 @Tag(name = "Seat Management", description = "Seat selection and locking endpoints")
 public class SeatController {

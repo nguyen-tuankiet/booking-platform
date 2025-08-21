@@ -8,7 +8,7 @@ WORKDIR /app
 COPY . .
 
 # Build the project
-RUN mvn clean package -DskipTests -pl eureka-server
+RUN mvn clean package -DskipTests
 
 # Runtime stage
 FROM amazoncorretto:21.0.8

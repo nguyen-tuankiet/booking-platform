@@ -15,7 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/v1/otp")
+@RequestMapping("/api/otp")
 @Slf4j
 @Tag(name = "OTP", description = "OTP verification and resend endpoints")
 public class OTPController {

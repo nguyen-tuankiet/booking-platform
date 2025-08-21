@@ -16,7 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/v1/transactions")
+@RequestMapping("/api/transactions")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Transactions", description = "Transaction history and details")

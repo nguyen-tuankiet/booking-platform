@@ -1,19 +1,16 @@
-#version: '3.8'
-
 services:
-  # Databases - chỉ MySQL vì MongoDB dùng Atlas
+  # Databases
   mysql:
     image: mysql:8.0
     environment:
-      MYSQL_ALLOW_EMPTY_PASSWORD: "true"  # Cho phép mật khẩu trống
+      MYSQL_ALLOW_EMPTY_PASSWORD: "true"
       MYSQL_DATABASE: auth_booking
-#      MYSQL_USER: root
     ports:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     command: --default-authentication-plugin=mysql_native_password
+
 
   redis:
     image: redis:7-alpine
@@ -22,12 +19,22 @@ services:
     volumes:
       - redis_data:/data
 
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+
   kafka:
-    image: confluentinc/cp-kafka:7.4.0  # Sử dụng version cụ thể
+    image: confluentinc/cp-kafka:7.4.0
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
@@ -37,17 +44,7 @@ services:
       - "9092:9092"
     depends_on:
       - zookeeper
-    restart: unless-stopped
 
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.4.0  # Sử dụng version tương ứng
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-      ZOOKEEPER_SERVER_ID: 1
-    ports:
-      - "2181:2181"
-    restart: unless-stopped
 
   # Microservices
   service-discovery:
@@ -57,7 +54,13 @@ services:
     ports:
       - "8761:8761"
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
+      - SERVER_PORT=8761
+      - EUREKA_INSTANCE_HOSTNAME=service-discovery
+      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=false
+      - EUREKA_CLIENT_FETCH_REGISTRY=false
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-discovery:8761/eureka/
+
+
 
   auth-service:
     build:
@@ -70,13 +73,17 @@ services:
       - redis
       - service-discovery
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
+      - SERVER_PORT=8081
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/auth_booking?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=Asia/Ho_Chi_Minh
       - SPRING_DATASOURCE_USERNAME=root
       - SPRING_DATASOURCE_PASSWORD=
-      - SPRING_REDIS_HOST=redis
-      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-discovery:8761/eureka
-
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-discovery:8761/eureka/
+      - EUREKA_CLIENT_FETCH_REGISTRY=true
+      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
+    restart: unless-stopped
 
   booking-service:
     build:
@@ -86,15 +93,18 @@ services:
       - "8082:8082"
     depends_on:
       - kafka
+      - redis
       - service-discovery
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
-      - SPRING_DATA_MONGODB_URI=mongodb+srv://tuankietcoder2211:kiet2211@booking-service.xoqbdpp.mongodb.net/?retryWrites=true&w=majority&appName=booking-service
-      - SPRING_DATA_MONGODB_DATABASE=booking-service
+      - SERVER_PORT=8082
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
       - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-discovery:8761/eureka
-    volumes:
-      - ~/.m2:/root/.m2
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-discovery:8761/eureka/
+      - EUREKA_CLIENT_FETCH_REGISTRY=true
+      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
+    restart: unless-stopped
 
   payment-service:
     build:
@@ -107,14 +117,18 @@ services:
       - kafka
       - service-discovery
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
+      - SERVER_PORT=8083
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/payment_service?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
       - SPRING_DATASOURCE_USERNAME=root
       - SPRING_DATASOURCE_PASSWORD=
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
       - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-discovery:8761/eureka
-    volumes:
-      - ~/.m2:/root/.m2
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-discovery:8761/eureka/
+      - EUREKA_CLIENT_FETCH_REGISTRY=true
+      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
+    restart: unless-stopped
 
   notification-service:
     build:
@@ -126,11 +140,13 @@ services:
       - kafka
       - service-discovery
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
+      - SERVER_PORT=8084
       - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-discovery:8761/eureka
-    volumes:
-      - ~/.m2:/root/.m2
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-discovery:8761/eureka/
+      - EUREKA_CLIENT_FETCH_REGISTRY=true
+      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
+    restart: unless-stopped
 
   api-gateway:
     build:
@@ -145,10 +161,13 @@ services:
       - payment-service
       - notification-service
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
-      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-discovery:8761/eureka
-    volumes:
-      - ~/.m2:/root/.m2
+      - SERVER_PORT=8080
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-discovery:8761/eureka/
+      - EUREKA_CLIENT_FETCH_REGISTRY=true
+      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
+      - SPRING_CLOUD_GATEWAY_DISCOVERY_LOCATOR_ENABLED=true
+      - SPRING_CLOUD_GATEWAY_DISCOVERY_LOCATOR_LOWER_CASE_SERVICE_ID=true
+    restart: unless-stopped
 
 volumes:
   mysql_data:

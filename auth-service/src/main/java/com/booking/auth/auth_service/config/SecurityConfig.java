@@ -63,23 +63,24 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authz -> authz
                         // Public endpoints
-                        .requestMatchers("/auth/register", "/auth/login", "/auth/logout","/auth/refresh-token").permitAll()
-                        .requestMatchers("/auth/verify-email/**", "/auth/resend-verification").permitAll()
-                        .requestMatchers("/auth/forgot-password", "/auth/reset-password/**").permitAll()
-                        .requestMatchers("/auth/check-username/**", "/auth/check-email/**").permitAll()
+                        .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/logout", "/api/auth/refresh-token").permitAll()
+                        .requestMatchers("/api/auth/verify-email/**", "/api/auth/resend-verification").permitAll()
+                        .requestMatchers("/api/auth/forgot-password", "/api/auth/reset-password/**").permitAll()
+                        .requestMatchers("/api/auth/check-username/**", "/api/auth/check-email/**").permitAll()
 
-                        .requestMatchers("/users/**").permitAll()
+                        .requestMatchers("/api/users/**").permitAll()
                         // Documentation and monitoring
                         .requestMatchers("/swagger-ui/**", "/api-docs/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers("/h2-console/**").permitAll()
 
                         // Admin endpoints
-                        .requestMatchers("/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
                         // All other requests need authentication
                         .anyRequest().authenticated()
                 )
+
                 .headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::disable))
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

@@ -10,6 +10,12 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 
+import org.springframework.context.annotation.Primary;
+import org.springframework.cloud.gateway.discovery.DiscoveryClientRouteDefinitionLocator;
+import org.springframework.cloud.gateway.route.RouteDefinition;
+import org.springframework.cloud.gateway.route.RouteDefinitionLocator;
+import reactor.core.publisher.Flux;
+
 import java.time.Duration;
 
 @Configuration
@@ -23,29 +29,23 @@ public class GatewayConfig {
     public RouteLocator customRouteLocator(RouteLocatorBuilder builder) {
         return builder.routes()
 
-                // Auth Service Routes
+                // ===== Auth Service =====
                 .route("auth-service", r -> r
                         .path("/api/auth/**")
                         .filters(f -> f
-                                .stripPrefix(2)
-                                .filter(rateLimitingFilter.apply(createRateLimitConfig(200, 1))) // Higher limit for auth
-                                .retry(retryConfig -> retryConfig
-                                        .setRetries(3)
-                                        .setMethods(HttpMethod.GET, HttpMethod.POST)
-                                        .setStatuses(HttpStatus.INTERNAL_SERVER_ERROR, HttpStatus.GATEWAY_TIMEOUT)
-                                        .setBackoff(Duration.ofMillis(100), Duration.ofMillis(1000), 2, true)
-                                )
+                                .stripPrefix(2) // /api/auth/** -> /auth/**
+                                .filter(rateLimitingFilter.apply(createRateLimitConfig(200,1)))
                         )
                         .uri("lb://auth-service")
                 )
 
-                // Booking Service Routes
+                // ===== Booking Service =====
                 .route("booking-service", r -> r
                         .path("/api/bookings/**")
                         .filters(f -> f
                                 .stripPrefix(2)
                                 .filter(jwtAuthenticationFilter.apply(new JwtAuthenticationFilter.Config()))
-                                .filter(rateLimitingFilter.apply(createRateLimitConfig(100, 1)))
+                                .filter(rateLimitingFilter.apply(createRateLimitConfig(100,1)))
                                 .retry(retryConfig -> retryConfig
                                         .setRetries(2)
                                         .setMethods(HttpMethod.GET)
@@ -56,48 +56,21 @@ public class GatewayConfig {
                         .uri("lb://booking-service")
                 )
 
-                // Payment Service Routes
+                // ===== Payment Service =====
                 .route("payment-service", r -> r
                         .path("/api/payments/**")
                         .filters(f -> f
                                 .stripPrefix(2)
                                 .filter(jwtAuthenticationFilter.apply(new JwtAuthenticationFilter.Config()))
-                                .filter(rateLimitingFilter.apply(createRateLimitConfig(50, 1))) // Lower limit for payments
+                                .filter(rateLimitingFilter.apply(createRateLimitConfig(50,1)))
                                 .retry(retryConfig -> retryConfig
-                                        .setRetries(1) // Less retries for payments to avoid duplicate charges
+                                        .setRetries(1)
                                         .setMethods(HttpMethod.GET)
                                         .setStatuses(HttpStatus.INTERNAL_SERVER_ERROR, HttpStatus.GATEWAY_TIMEOUT)
                                         .setBackoff(Duration.ofMillis(200), Duration.ofMillis(800), 2, true)
                                 )
                         )
                         .uri("lb://payment-service")
-                )
-
-                // Notification Service Routes
-                .route("notification-service", r -> r
-                        .path("/api/notifications/**")
-                        .filters(f -> f
-                                .stripPrefix(2)
-                                .filter(jwtAuthenticationFilter.apply(new JwtAuthenticationFilter.Config()))
-                                .filter(rateLimitingFilter.apply(createRateLimitConfig(150, 1)))
-                                .retry(retryConfig -> retryConfig
-                                        .setRetries(2)
-                                        .setMethods(HttpMethod.GET, HttpMethod.POST)
-                                        .setStatuses(HttpStatus.INTERNAL_SERVER_ERROR, HttpStatus.GATEWAY_TIMEOUT)
-                                        .setBackoff(Duration.ofMillis(100), Duration.ofMillis(500), 2, true)
-                                )
-                        )
-                        .uri("lb://notification-service")
-                )
-
-                // Fallback route for undefined paths
-                .route("fallback", r -> r
-                        .path("/**")
-                        .filters(f -> f
-                                .setStatus(404)
-                                .setResponseHeader("Content-Type", "application/json")
-                        )
-                        .uri("forward:/fallback")
                 )
 
                 .build();

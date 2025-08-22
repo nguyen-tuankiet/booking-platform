@@ -25,7 +25,8 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
     // Public endpoints that don't require authentication
     private static final List<String> PUBLIC_ENDPOINTS = List.of(
             "/api/auth/**",
-            "/actuator/health"
+            "/actuator/health",
+            "/debug/**"
     );
 
     public JwtAuthenticationFilter(JwtUtil jwtUtil) {

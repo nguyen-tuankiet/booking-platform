@@ -14,7 +14,7 @@ import java.util.Map;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/emails")
+@RequestMapping("/emails")
 @RequiredArgsConstructor
 @Tag(name = "Email Service", description = "Email notification endpoints")
 public class EmailController {

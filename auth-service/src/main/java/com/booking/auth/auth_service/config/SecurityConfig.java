@@ -25,22 +25,20 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
 import java.util.List;
-
 @Configuration
 @EnableWebSecurity
 @EnableGlobalMethodSecurity(prePostEnabled = true)
 @RequiredArgsConstructor
 public class SecurityConfig {
-    private final CustomUserDetailsService customUserDetailsService; // tai thong tin user tu db
-    private final JwtAuthenticationEntryPoint unauthorizedHandler; // tra Json 401 khi token loi/het han
-    private final JwtAuthenticationFilter jwtAuthenticationFilter; // doc Jwt tu request va xac thuc
+    private final CustomUserDetailsService customUserDetailsService;
+    private final JwtAuthenticationEntryPoint unauthorizedHandler;
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
-    // xac thuc user tu DB
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
@@ -54,7 +52,6 @@ public class SecurityConfig {
         return config.getAuthenticationManager();
     }
 
-
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -62,25 +59,25 @@ public class SecurityConfig {
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedHandler))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authz -> authz
-                        // Public endpoints
-                        .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/logout", "/api/auth/refresh-token").permitAll()
-                        .requestMatchers("/api/auth/verify-email/**", "/api/auth/resend-verification").permitAll()
-                        .requestMatchers("/api/auth/forgot-password", "/api/auth/reset-password/**").permitAll()
-                        .requestMatchers("/api/auth/check-username/**", "/api/auth/check-email/**").permitAll()
+                        // Public endpoints (bỏ /api/auth)
+                        .requestMatchers("/register", "/login", "/logout", "/refresh-token").permitAll()
+                        .requestMatchers("/verify-email/**", "/resend-verification").permitAll()
+                        .requestMatchers("/forgot-password", "/reset-password/**").permitAll()
+                        .requestMatchers("/check-username/**", "/check-email/**").permitAll()
 
-                        .requestMatchers("/api/users/**").permitAll()
+                        .requestMatchers("/users/**").permitAll()
+
                         // Documentation and monitoring
                         .requestMatchers("/swagger-ui/**", "/api-docs/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers("/h2-console/**").permitAll()
 
                         // Admin endpoints
-                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/admin/**").hasRole("ADMIN")
 
                         // All other requests need authentication
                         .anyRequest().authenticated()
                 )
-
                 .headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::disable))
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

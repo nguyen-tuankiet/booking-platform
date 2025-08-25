@@ -6,6 +6,6 @@ RUN mvn clean package -DskipTests
 
 FROM amazoncorretto:21.0.8
 WORKDIR /app
-COPY --from=build /app/payment-service/target/payment-service-*.jar app.jar
+COPY --from=build /app/booking-service/target/booking-service-*.jar app.jar
 EXPOSE 8083
 CMD ["java", "-jar", "app.jar"]

@@ -12,7 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/payment-sessions")
+@RequestMapping("/payment-sessions")
 @Slf4j
 @Tag(name = "Payment Sessions", description = "Payment session management endpoints")
 public class PaymentSessionController {

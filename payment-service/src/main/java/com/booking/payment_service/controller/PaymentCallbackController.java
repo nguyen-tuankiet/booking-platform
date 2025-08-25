@@ -13,7 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/payments/callback")
+@RequestMapping("/callback")
 @Slf4j
 @Tag(name = "Payment Callback", description = "Endpoints to receive payment gateway callbacks")
 public class PaymentCallbackController {

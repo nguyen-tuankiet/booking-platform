@@ -25,7 +25,7 @@ import java.util.List;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/flights")
+@RequestMapping("/flights")
 @RequiredArgsConstructor
 @Tag(name = "Flight Management", description = "Flight search and information endpoints")
 public class FlightController {

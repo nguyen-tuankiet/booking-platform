@@ -24,7 +24,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/payments")
+//@RequestMapping("/api/payments")
 @Slf4j
 @Tag(name = "Payment Management", description = "APIs for payment processing and management")
 public class PaymentController {

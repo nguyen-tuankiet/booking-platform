@@ -16,7 +16,7 @@ FROM amazoncorretto:21.0.8
 WORKDIR /app
 
 # Copy the built JAR from build stage
-COPY --from=build /app/eureka-server/target/eureka-server-*.jar app.jar
+COPY --from=build /app/payment-service/target/payment-service-*.jar app.jar
 
 # Run application
 EXPOSE 8761

@@ -15,7 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/refunds")
+@RequestMapping("/refunds")
 @Slf4j
 @Tag(name = "Refunds", description = "Refund processing and status")
 public class RefundController {

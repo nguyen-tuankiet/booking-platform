@@ -26,7 +26,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Set;
 
 @RestController
-@RequestMapping("/api/test")
+@RequestMapping("/test")
 @Tag(name = "Test Endpoints", description = "Test endpoints for debugging")
 public class TestController {
 

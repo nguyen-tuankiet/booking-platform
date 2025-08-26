@@ -9,6 +9,7 @@ import com.booking.booking_service.entity.Flight;
 import com.booking.booking_service.entity.SeatLock;
 import com.booking.booking_service.entity.PassengerInfo;
 import com.booking.booking_service.repository.BookingRepository;
+import com.booking.booking_service.security.UserPrincipal;
 import com.booking.booking_service.service.*;
 import com.booking.booking_service.utils.BookingStatus;
 import com.booking.booking_service.utils.PaymentStatus;
@@ -403,10 +404,20 @@ public class BookingServiceImpl implements BookingService {
 
     private Long getCurrentUserId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.getPrincipal() instanceof org.springframework.security.core.userdetails.User) {
-            // Extract user ID from JWT claims if needed
-            return 1L; // TODO: Extract from JWT token
+
+        if (auth != null && auth.getPrincipal() instanceof UserPrincipal) {
+            UserPrincipal userPrincipal = (UserPrincipal) auth.getPrincipal();
+            return userPrincipal.getId();
         }
+
+        // Fallback - try to get from headers (if request comes through gateway)
+        // This would require injecting HttpServletRequest
+        // String userIdHeader = request.getHeader("X-User-Id");
+        // if (userIdHeader != null) {
+        //     return Long.parseLong(userIdHeader);
+        // }
+
+        log.warn("Unable to get current user ID, using default");
         return 1L; // Default for testing
     }
 

@@ -1,6 +1,5 @@
 package com.booking.api_gateway.util;
 
-
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
@@ -52,7 +51,17 @@ public class JwtUtil {
 
     public String getUserIdFromToken(String token) {
         Claims claims = getClaimsFromToken(token);
-        return claims.get("userId", String.class);
+        Object userIdObj = claims.get("userId");
+
+        // Handle both String and Number types
+        if (userIdObj instanceof String) {
+            return (String) userIdObj;
+        } else if (userIdObj instanceof Number) {
+            return String.valueOf(((Number) userIdObj).longValue());
+        } else {
+            log.warn("Unexpected userId type: {}", userIdObj != null ? userIdObj.getClass() : "null");
+            return userIdObj != null ? userIdObj.toString() : null;
+        }
     }
 
     @SuppressWarnings("unchecked")

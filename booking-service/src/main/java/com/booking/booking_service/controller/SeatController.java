@@ -20,7 +20,7 @@ import java.util.List;
 
 @Slf4j
 @RestController
-@RequestMapping("/seats")
+//@RequestMapping("/seats")
 @RequiredArgsConstructor
 @Tag(name = "Seat Management", description = "Seat selection and locking endpoints")
 public class SeatController {
@@ -28,7 +28,7 @@ public class SeatController {
     private final BookingService bookingService;
     private final SeatLockService seatLockService;
 
-    @PostMapping("/select")
+    @PostMapping("/seats/select")
     @Operation(summary = "Select seats", description = "Select and lock seats for booking")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Seats selected and locked successfully"),
@@ -43,7 +43,7 @@ public class SeatController {
         return ResponseEntity.ok(ApiResponse.builderResponse(SuccessCode.UPDATED, seatLocks));
     }
 
-    @PostMapping("/release")
+    @PostMapping("/seats/release")
     @Operation(summary = "Release seat locks", description = "Release all seat locks for current user on specified flight")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Seat locks released successfully"),
@@ -52,12 +52,11 @@ public class SeatController {
     public ResponseEntity<ApiResponse<Void>> releaseSeatLocks(
             @Parameter(description = "Flight ID") @RequestParam String flightId) {
 
-        // Get current user từ security context sẽ được implement trong service
         seatLockService.releaseUserLocks(flightId, getCurrentUserId());
         return ResponseEntity.ok(ApiResponse.builderResponse(SuccessCode.UPDATED, null));
     }
 
-    @PostMapping("/release/session")
+    @PostMapping("/seats/release-session")
     @Operation(summary = "Release session locks", description = "Release all seat locks for a session")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Session locks released successfully")
@@ -69,7 +68,7 @@ public class SeatController {
         return ResponseEntity.ok(ApiResponse.builderResponse(SuccessCode.UPDATED, null));
     }
 
-    @GetMapping("/locks")
+    @GetMapping("/seats/my-locks")
     @Operation(summary = "Get user seat locks", description = "Get all active seat locks for current user")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Seat locks retrieved successfully"),
@@ -80,7 +79,7 @@ public class SeatController {
         return ResponseEntity.ok(ApiResponse.builderResponse(SuccessCode.FETCHED, seatLocks));
     }
 
-    @PostMapping("/{flightId}/{seatNumber}/extend")
+    @PostMapping("/seats/extend-lock/{flightId}/{seatNumber}")
     @Operation(summary = "Extend seat lock", description = "Extend seat lock duration")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Seat lock extended successfully"),

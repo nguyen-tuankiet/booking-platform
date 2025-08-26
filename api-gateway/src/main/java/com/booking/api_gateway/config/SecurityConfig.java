@@ -20,6 +20,8 @@ public class SecurityConfig {
                                 "/actuator/health",
                                 "/actuator/info",
                                 "/api/auth/**",
+                                "/api/bookings/**",
+                                "/api/payments/**",
                                 "/debug/**"
                         ).permitAll()
                         .anyExchange().authenticated()

@@ -104,7 +104,11 @@ services:
       - EUREKA_CLIENT_FETCH_REGISTRY=true
       - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
       - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
+      # Fix MongoDB URI
       - SPRING_DATA_MONGODB_URI=mongodb+srv://tuankietcoder2211:kiet2211@booking-service.xoqbdpp.mongodb.net/booking-service?retryWrites=true&w=majority&appName=booking-service
+      # Add these for better connection handling
+      - SPRING_DATA_MONGODB_SOCKET_TIMEOUT=10000
+      - SPRING_DATA_MONGODB_CONNECT_TIMEOUT=10000
     restart: unless-stopped
 
   payment-service:

@@ -42,7 +42,7 @@ public class BookingController {
         return ResponseEntity.ok(ApiResponse.builderResponse(SuccessCode.FETCHED, message));
     }
 
-    @PostMapping
+    @PostMapping("/create-booking")
     @Operation(summary = "Create booking", description = "Create a new flight booking")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Booking created successfully"),
@@ -58,7 +58,7 @@ public class BookingController {
                 .body(ApiResponse.builderResponse(SuccessCode.CREATED, booking));
     }
 
-    @GetMapping
+    @GetMapping("/my-bookings")
     @Operation(summary = "Get user bookings", description = "Retrieve current user's bookings with pagination")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Bookings retrieved successfully"),
@@ -74,7 +74,7 @@ public class BookingController {
         return ResponseEntity.ok(ApiResponse.builderResponse(SuccessCode.FETCHED, bookings));
     }
 
-    @GetMapping("/{bookingId}")
+    @GetMapping("/booking/{bookingId}")
     @Operation(summary = "Get booking by ID", description = "Retrieve specific booking details")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Booking retrieved successfully"),
@@ -88,7 +88,7 @@ public class BookingController {
         return ResponseEntity.ok(ApiResponse.builderResponse(SuccessCode.FETCHED, booking));
     }
 
-    @GetMapping("/reference/{bookingReference}")
+    @GetMapping("/booking-reference/{bookingReference}")
     @Operation(summary = "Get booking by reference", description = "Retrieve booking details using booking reference")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Booking retrieved successfully"),
@@ -102,7 +102,7 @@ public class BookingController {
         return ResponseEntity.ok(ApiResponse.builderResponse(SuccessCode.FETCHED, booking));
     }
 
-    @PostMapping("/{bookingId}/cancel")
+    @PostMapping("/cancel-booking/{bookingId}")
     @Operation(summary = "Cancel booking", description = "Cancel an existing booking")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Booking cancelled successfully"),
@@ -118,7 +118,7 @@ public class BookingController {
         return ResponseEntity.ok(ApiResponse.builderResponse(SuccessCode.UPDATED, null));
     }
 
-    @PutMapping("/{bookingId}/confirm")
+    @PutMapping("/confirm-booking/{bookingId}")
     @PreAuthorize("hasRole('SYSTEM') or hasRole('ADMIN')")
     @Operation(summary = "Confirm booking", description = "Confirm booking after successful payment (System/Admin only)")
     @ApiResponses(value = {

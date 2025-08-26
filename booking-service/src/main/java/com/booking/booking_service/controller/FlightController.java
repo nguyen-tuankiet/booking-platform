@@ -25,14 +25,14 @@ import java.util.List;
 
 @Slf4j
 @RestController
-@RequestMapping("/flights")
+//@RequestMapping("/flights")
 @RequiredArgsConstructor
 @Tag(name = "Flight Management", description = "Flight search and information endpoints")
 public class FlightController {
 
     private final FlightService flightService;
 
-    @GetMapping("/search")
+    @GetMapping("/flights/search")
     @Operation(summary = "Search flights", description = "Search for available flights based on criteria")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Flights found successfully"),
@@ -49,7 +49,7 @@ public class FlightController {
         return ResponseEntity.ok(ApiResponse.builderResponse(SuccessCode.FETCHED, flights));
     }
 
-    @GetMapping("/{flightId}")
+    @GetMapping("/flights/{flightId}")
     @Operation(summary = "Get flight details", description = "Retrieve detailed information about a specific flight")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Flight details retrieved successfully"),
@@ -62,7 +62,7 @@ public class FlightController {
         return ResponseEntity.ok(ApiResponse.builderResponse(SuccessCode.FETCHED, flight));
     }
 
-    @GetMapping("/{flightId}/seats")
+    @GetMapping("/flights/{flightId}/seat-map")
     @Operation(summary = "Get flight seat map", description = "Retrieve seat map and availability for a specific flight")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Seat map retrieved successfully"),
@@ -75,7 +75,7 @@ public class FlightController {
         return ResponseEntity.ok(ApiResponse.builderResponse(SuccessCode.FETCHED, seatMap));
     }
 
-    @GetMapping("/{flightId}/availability")
+    @GetMapping("/flights/{flightId}/check-availability")
     @Operation(summary = "Check seat availability", description = "Check if specific seats are available for booking")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Seat availability checked"),
@@ -89,9 +89,9 @@ public class FlightController {
         return ResponseEntity.ok(ApiResponse.builderResponse(SuccessCode.FETCHED, available));
     }
 
-    // ===== CRUD Operations =====
-    
-    @PostMapping
+    // ===== FLIGHT MANAGEMENT CRUD OPERATIONS =====
+
+    @PostMapping("/flights/create")
     @Operation(summary = "Create new flight", description = "Create a new flight with all required information")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Flight created successfully"),
@@ -105,7 +105,7 @@ public class FlightController {
         return ResponseEntity.status(201).body(ApiResponse.builderResponse(SuccessCode.CREATED, flight));
     }
 
-    @PutMapping("/{flightId}")
+    @PutMapping("/flights/update/{flightId}")
     @Operation(summary = "Update flight", description = "Update an existing flight's information")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Flight updated successfully"),
@@ -121,7 +121,7 @@ public class FlightController {
         return ResponseEntity.ok(ApiResponse.builderResponse(SuccessCode.UPDATED, flight));
     }
 
-    @DeleteMapping("/{flightId}")
+    @DeleteMapping("/flights/delete/{flightId}")
     @Operation(summary = "Delete flight", description = "Delete a flight (only if no active bookings)")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Flight deleted successfully"),
@@ -135,7 +135,7 @@ public class FlightController {
         return ResponseEntity.ok(ApiResponse.builderResponse(SuccessCode.DELETED, null));
     }
 
-    @GetMapping
+    @GetMapping("/flights/all")
     @Operation(summary = "Get all flights", description = "Retrieve all flights with pagination")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Flights retrieved successfully")

@@ -36,4 +36,5 @@ public interface SeatLockRepository extends MongoRepository<SeatLock, String> {
     void deleteByFlightIdAndSeatNumberAndUserId(String flightId, String seatNumber, Long userId);
 
     void deleteBySessionId(String sessionId);
+
 }

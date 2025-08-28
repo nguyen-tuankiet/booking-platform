@@ -14,7 +14,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class PaymentRequestedEvent {
-    private Long bookingId;
+    private String bookingId;
     private String bookingReference;
     private Long userId;
     private BigDecimal amount;

@@ -27,7 +27,7 @@ public class PaymentSession extends BaseEntity {
     String sessionId;
 
     @Column(name = "booking_id", nullable = false)
-    Long bookingId;
+    String bookingId;
 
     @Column(name = "user_id", nullable = false)
     Long userId;

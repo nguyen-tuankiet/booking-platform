@@ -19,7 +19,7 @@ public class PaymentRequest {
 
     @NotNull(message = "Booking ID cannot be null")
     @Positive(message = "Booking ID must be positive")
-    Long bookingId;
+    String bookingId;
     Long userId;
     @NotNull(message = "Amount cannot be null")
     @DecimalMin(value = "0.01", message = "Amount must be greater than 0")

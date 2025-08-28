@@ -10,6 +10,7 @@ import lombok.experimental.FieldDefaults;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+@EqualsAndHashCode(callSuper = true)
 @Entity
 @Data
 @NoArgsConstructor
@@ -26,7 +27,7 @@ public class Transaction extends BaseEntity {
     String transactionId;
 
     @Column(name = "booking_id", nullable = false)
-    Long bookingId;
+    String bookingId;
 
     @Column(name = "user_id", nullable = false)
     Long userId;

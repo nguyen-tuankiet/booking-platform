@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.beans.factory.annotation.Value;
 
 import javax.crypto.SecretKey;
 import org.slf4j.Logger;
@@ -31,6 +32,10 @@ import java.util.Set;
 public class TestController {
 
     private static final Logger log = LoggerFactory.getLogger(TestController.class);
+    
+    @Value("${jwt.secret}")
+    private String jwtSecret;
+    
     private final MongoTemplate mongoTemplate;
     private final RedisTemplate<String, Object> redisTemplate;
 
@@ -53,7 +58,7 @@ public class TestController {
         try {
             if (authHeader != null && authHeader.startsWith("Bearer ")) {
                 String token = authHeader.substring(7);
-                SecretKey key = Keys.hmacShaKeyFor("in8roOCvJUSjXDse/fo4UNznTOrbw9z1Yml9wiJ/ItI/+Bxe8ju6VLLm8GamJYDajKK87lZJYBviPqAFaweV7g==".getBytes());
+                SecretKey key = Keys.hmacShaKeyFor(jwtSecret.getBytes());
                 Claims claims = Jwts.parserBuilder()
                         .setSigningKey(key)
                         .build()

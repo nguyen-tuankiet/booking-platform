@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class PaymentSessionResponse {
     String sessionId;
-    Long bookingId;
+    String bookingId;
     BigDecimal amount;
     String currency;
     PaymentSessionStatus status;

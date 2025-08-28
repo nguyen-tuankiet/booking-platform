@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class TransactionHistoryResponse {
     String transactionId;
-    Long bookingId;
+    String bookingId;
     BigDecimal amount;
     String currency;
     TransactionStatus status;

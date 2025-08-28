@@ -13,6 +13,8 @@ import com.booking.booking_service.service.FlightService;
 import com.booking.booking_service.utils.SeatStatus;
 import com.booking.common_library.dto.PageResponse;
 import com.booking.common_library.exception.ResourceNotFoundException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
@@ -36,6 +38,8 @@ public class FlightServiceImpl implements FlightService {
     private final FlightRepository flightRepository;
     private final SeatLockRepository seatLockRepository;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final ObjectMapper objectMapper;
+
 
     private static final String FLIGHT_CACHE_PREFIX = "flight:";
     private static final String SEARCH_CACHE_PREFIX = "search:";
@@ -210,11 +214,9 @@ public class FlightServiceImpl implements FlightService {
         String cacheKey = SEARCH_CACHE_PREFIX + request.hashCode() + ":" + pageable.toString();
 
         // Kiểm tra cache trước
-        @SuppressWarnings("unchecked")
-        PageResponse<FlightResponse> cachedResult = (PageResponse<FlightResponse>) redisTemplate.opsForValue().get(cacheKey);
-        if (cachedResult != null) {
-            log.debug("Returning cached search results");
-            return cachedResult;
+        Object cached = redisTemplate.opsForValue().get(cacheKey);
+        if (cached != null) {
+            return objectMapper.convertValue(cached, new TypeReference<PageResponse<FlightResponse>>() {});
         }
 
         // Tính toán thời gian tìm kiếm
@@ -259,11 +261,11 @@ public class FlightServiceImpl implements FlightService {
     public FlightResponse getFlightById(String flightId) {
         log.info("Getting flight details for ID: {}", flightId);
 
-        // Kiểm tra cache trước
         String cacheKey = FLIGHT_CACHE_PREFIX + flightId;
-        FlightResponse cachedFlight = (FlightResponse) redisTemplate.opsForValue().get(cacheKey);
-        if (cachedFlight != null) {
-            return cachedFlight;
+        Object cached = redisTemplate.opsForValue().get(cacheKey);
+
+        if (cached != null) {
+            return objectMapper.convertValue(cached, FlightResponse.class);
         }
 
         Flight flight = flightRepository.findById(flightId)
@@ -271,7 +273,6 @@ public class FlightServiceImpl implements FlightService {
 
         FlightResponse response = convertToFlightResponse(flight);
 
-        // Cache trong 10 phút
         redisTemplate.opsForValue().set(cacheKey, response, 10, TimeUnit.MINUTES);
 
         return response;

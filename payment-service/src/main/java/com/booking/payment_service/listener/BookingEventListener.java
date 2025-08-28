@@ -52,7 +52,7 @@ public class BookingEventListener {
 
             // Create payment request
             PaymentRequest paymentRequest = PaymentRequest.builder()
-                    .bookingId(Long.valueOf(event.getBookingId()))
+                    .bookingId(event.getBookingId())
                     .userId(event.getUserId())
                     .amount(event.getAmount())
                     .currency(event.getCurrency())

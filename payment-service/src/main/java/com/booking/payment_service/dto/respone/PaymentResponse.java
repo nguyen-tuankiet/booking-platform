@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class PaymentResponse {
     String transactionId;
-    Long bookingId;
+    String bookingId;
     BigDecimal amount;
     String currency;
     TransactionStatus status;

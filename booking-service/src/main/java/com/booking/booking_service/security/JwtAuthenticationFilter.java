@@ -32,6 +32,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Value("${jwt.secret}")
     private String jwtSecret;
 
+    private SecretKey getSigningKey() {
+        // FIX: Decode the Base64-encoded secret key properly
+        byte[] keyBytes = Base64.getDecoder().decode(jwtSecret);
+        return Keys.hmacShaKeyFor(keyBytes);
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
@@ -66,7 +72,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private boolean validateToken(String token) {
         try {
-            SecretKey key = Keys.hmacShaKeyFor(Base64.getDecoder().decode(jwtSecret));
+            SecretKey key = getSigningKey(); // Use the fixed method
             Jwts.parserBuilder()
                     .setSigningKey(key)
                     .build()
@@ -79,7 +85,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private Authentication getAuthenticationFromToken(String token) {
-        SecretKey key = Keys.hmacShaKeyFor(jwtSecret.getBytes());
+        SecretKey key = getSigningKey(); // Use the fixed method
         Claims claims = Jwts.parserBuilder()
                 .setSigningKey(key)
                 .build()
@@ -87,12 +93,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 .getBody();
 
         String username = claims.getSubject();
-        Long userId = claims.get("userId", Long.class);
+
+        // Handle both String and Number types for userId
+        Object userIdObj = claims.get("userId");
+        Long userId = null;
+        if (userIdObj instanceof String) {
+            userId = Long.valueOf((String) userIdObj);
+        } else if (userIdObj instanceof Number) {
+            userId = ((Number) userIdObj).longValue();
+        }
 
         @SuppressWarnings("unchecked")
         List<String> roles = claims.get("roles", List.class);
 
-        List<SimpleGrantedAuthority> authorities = roles.stream()
+        List<SimpleGrantedAuthority> authorities = roles != null ? roles.stream()
                 .map(role -> {
                     // Handle both formats: "ROLE_USER" and "USER"
                     if (role.startsWith("ROLE_")) {
@@ -101,7 +115,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         return new SimpleGrantedAuthority("ROLE_" + role);
                     }
                 })
-                .collect(Collectors.toList());
+                .collect(Collectors.toList()) : List.of();
 
         UserPrincipal userPrincipal = UserPrincipal.builder()
                 .id(userId)

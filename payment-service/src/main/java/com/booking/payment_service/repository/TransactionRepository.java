@@ -21,7 +21,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
 
     Optional<Transaction> findByTransactionIdAndDeleted(String transactionId, Boolean deleted);
 
-    List<Transaction> findByBookingIdAndDeleted(Long bookingId, Boolean deleted);
+    List<Transaction> findByBookingIdAndDeleted(String bookingId, Boolean deleted);
 
     Page<Transaction> findByUserIdAndDeleted(Long userId, Boolean deleted, Pageable pageable);
 

@@ -2,6 +2,7 @@ package com.booking.payment_service.dto.request;
 
 import com.booking.payment_service.utils.PaymentMethod;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.*;
@@ -18,7 +19,7 @@ import java.util.Map;
 public class PaymentRequest {
 
     @NotNull(message = "Booking ID cannot be null")
-    @Positive(message = "Booking ID must be positive")
+    @NotBlank(message = "Booking ID must not be blank")
     String bookingId;
     Long userId;
     @NotNull(message = "Amount cannot be null")

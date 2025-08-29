@@ -33,7 +33,7 @@ public class TransactionServiceImpl implements TransactionService {
         Transaction transaction = Transaction.builder()
                 .transactionId(transactionId)
                 .bookingId(request.getBookingId())
-                .userId(getCurrentUserId()) // This should come from security context
+                .userId(getCurrentUserId())
                 .amount(request.getAmount())
                 .currency(request.getCurrency())
                 .status(TransactionStatus.PENDING)

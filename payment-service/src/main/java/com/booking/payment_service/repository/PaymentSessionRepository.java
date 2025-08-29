@@ -19,7 +19,7 @@ public interface PaymentSessionRepository extends JpaRepository<PaymentSession, 
 
     Optional<PaymentSession> findBySessionIdAndDeleted(String sessionId, Boolean deleted);
 
-    Optional<PaymentSession> findByBookingIdAndStatusAndDeleted(Long bookingId, PaymentSessionStatus status, Boolean deleted);
+    Optional<PaymentSession> findByBookingIdAndStatusAndDeleted(String bookingId, PaymentSessionStatus status, Boolean deleted);
 
     List<PaymentSession> findByUserIdAndDeleted(Long userId, Boolean deleted);
 

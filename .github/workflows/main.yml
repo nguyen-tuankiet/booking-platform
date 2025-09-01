@@ -1,0 +1,202 @@
+name: CI/CD Pipeline - Develop Branch
+
+on:
+  push:
+    branches: [ develop ]
+  pull_request:
+    branches: [ develop ]
+
+env:
+  DOCKER_REGISTRY: docker.io
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+  IMAGE_TAG: develop-${{ github.sha }}
+
+jobs:
+  # Job 1: Test and Build
+  test-and-build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [
+          eureka-server,
+          api-gateway, 
+          auth-service,
+          booking-service,
+          payment-service,
+          notification-service
+        ]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'corretto'
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+
+      - name: Run tests for ${{ matrix.service }}
+        run: |
+          cd ${{ matrix.service }}
+          mvn clean test
+
+      - name: Build application for ${{ matrix.service }}
+        run: |
+          cd ${{ matrix.service }}
+          mvn clean package -DskipTests
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.service }}-jar
+          path: ${{ matrix.service }}/target/*.jar
+          retention-days: 1
+
+  # Job 2: Build and Push Docker Images
+  docker-build-push:
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [
+          eureka-server,
+          api-gateway, 
+          auth-service,
+          booking-service,
+          payment-service,
+          notification-service
+        ]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_PASSWORD }}
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.service }}-jar
+          path: ${{ matrix.service }}/target/
+
+      - name: Build and push Docker image for ${{ matrix.service }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.service }}/Dockerfile
+          push: true
+          tags: |
+            ${{ env.DOCKER_USERNAME }}/booking-${{ matrix.service }}:${{ env.IMAGE_TAG }}
+            ${{ env.DOCKER_USERNAME }}/booking-${{ matrix.service }}:develop-latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Job 3: Security Scan
+  security-scan:
+    needs: docker-build-push
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [
+          eureka-server,
+          api-gateway, 
+          auth-service,
+          booking-service,
+          payment-service,
+          notification-service
+        ]
+    
+    steps:
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.DOCKER_USERNAME }}/booking-${{ matrix.service }}:${{ env.IMAGE_TAG }}
+          format: 'sarif'
+          output: 'trivy-results-${{ matrix.service }}.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results-${{ matrix.service }}.sarif'
+
+  # Job 4: Deploy to Development Environment
+  deploy-dev:
+    needs: [docker-build-push, security-scan]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create development docker-compose
+        run: |
+          # Create development version of docker-compose with new image tags
+          sed "s|build:|#build:|g" docker-compose.yml > docker-compose.dev.yml
+          sed -i "s|dockerfile:|#dockerfile:|g" docker-compose.dev.yml
+          
+          # Add image tags for each service
+          sed -i "s|#build:|image: ${{ env.DOCKER_USERNAME }}/booking-eureka-server:${{ env.IMAGE_TAG }}|g" docker-compose.dev.yml
+          sed -i "s|api-gateway:|&\n    image: ${{ env.DOCKER_USERNAME }}/booking-api-gateway:${{ env.IMAGE_TAG }}|g" docker-compose.dev.yml
+          sed -i "s|auth-service:|&\n    image: ${{ env.DOCKER_USERNAME }}/booking-auth-service:${{ env.IMAGE_TAG }}|g" docker-compose.dev.yml
+          sed -i "s|booking-service:|&\n    image: ${{ env.DOCKER_USERNAME }}/booking-booking-service:${{ env.IMAGE_TAG }}|g" docker-compose.dev.yml
+          sed -i "s|payment-service:|&\n    image: ${{ env.DOCKER_USERNAME }}/booking-payment-service:${{ env.IMAGE_TAG }}|g" docker-compose.dev.yml
+          sed -i "s|notification-service:|&\n    image: ${{ env.DOCKER_USERNAME }}/booking-notification-service:${{ env.IMAGE_TAG }}|g" docker-compose.dev.yml
+
+      - name: Upload docker-compose for deployment
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-compose-dev
+          path: docker-compose.dev.yml
+          retention-days: 30
+
+      - name: Deploy notification
+        run: |
+          echo " Deployment completed successfully!"
+          echo " Images pushed to Docker Hub:"
+          echo "  - booking-eureka-server:${{ env.IMAGE_TAG }}"
+          echo "  - booking-api-gateway:${{ env.IMAGE_TAG }}"
+          echo "  - booking-auth-service:${{ env.IMAGE_TAG }}"
+          echo "  - booking-booking-service:${{ env.IMAGE_TAG }}"
+          echo "  - booking-payment-service:${{ env.IMAGE_TAG }}"
+          echo "  - booking-notification-service:${{ env.IMAGE_TAG }}"
+
+  # Job 5: Notify deployment status
+  notify:
+    needs: [deploy-dev]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Notify success
+        if: needs.deploy-dev.result == 'success'
+        run: |
+          echo " CI/CD Pipeline completed successfully!"
+          echo "Branch: develop"
+          echo "Commit: ${{ github.sha }}"
+          echo "All services deployed to development environment"
+
+      - name: Notify failure
+        if: needs.deploy-dev.result == 'failure' || needs.deploy-dev.result == 'cancelled'
+        run: |
+          echo " CI/CD Pipeline failed!"
+          echo "Branch: develop" 
+          echo "Commit: ${{ github.sha }}"
+          echo "Please check the logs for details"

@@ -13,8 +13,42 @@ env:
   IMAGE_TAG: develop-${{ github.sha }}
 
 jobs:
-  # Job 1: Test and Build
+  # Job 1: Build Common Library First
+  build-common-library:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'corretto'
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+
+      - name: Install common-library to local repository
+        run: |
+          cd common-library
+          mvn clean install -DskipTests
+          
+      - name: Upload Maven local repository
+        uses: actions/upload-artifact@v4
+        with:
+          name: maven-local-repo
+          path: ~/.m2/repository
+          retention-days: 1
+
+  # Job 2: Test and Build Services
   test-and-build:
+    needs: build-common-library
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -44,6 +78,12 @@ jobs:
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
 
+      - name: Download Maven local repository
+        uses: actions/download-artifact@v4
+        with:
+          name: maven-local-repo
+          path: ~/.m2/repository
+
       - name: Run tests for ${{ matrix.service }}
         run: |
           cd ${{ matrix.service }}
@@ -61,7 +101,7 @@ jobs:
           path: ${{ matrix.service }}/target/*.jar
           retention-days: 1
 
-  # Job 2: Build and Push Docker Images
+  # Job 3: Build and Push Docker Images
   docker-build-push:
     needs: test-and-build
     runs-on: ubuntu-latest
@@ -107,7 +147,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # Job 3: Security Scan
+  # Job 4: Security Scan
   security-scan:
     needs: docker-build-push
     runs-on: ubuntu-latest
@@ -136,7 +176,7 @@ jobs:
         with:
           sarif_file: 'trivy-results-${{ matrix.service }}.sarif'
 
-  # Job 4: Deploy to Development Environment
+  # Job 5: Deploy to Development Environment
   deploy-dev:
     needs: [docker-build-push, security-scan]
     runs-on: ubuntu-latest
@@ -178,7 +218,7 @@ jobs:
           echo "  - booking-payment-service:${{ env.IMAGE_TAG }}"
           echo "  - booking-notification-service:${{ env.IMAGE_TAG }}"
 
-  # Job 5: Notify deployment status
+  # Job 6: Notify deployment status
   notify:
     needs: [deploy-dev]
     runs-on: ubuntu-latest

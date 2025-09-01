@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ develop ]
 
+permissions:
+  contents: read
+  security-events: write
+
 env:
   DOCKER_REGISTRY: docker.io
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}

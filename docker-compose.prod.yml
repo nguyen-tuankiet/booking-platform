@@ -1,3 +1,6 @@
+
+version: '3.8'
+
 services:
   # Databases
   mysql:
@@ -10,15 +13,22 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
     command: --default-authentication-plugin=mysql_native_password
-
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
 
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
     volumes:
-      - redis_data:/dta
-
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
@@ -27,7 +37,11 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
     ports:
       - "2181:2181"
-
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo 'ruok' | nc localhost 2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   kafka:
     image: confluentinc/cp-kafka:7.4.0
@@ -43,14 +57,17 @@ services:
     ports:
       - "9092:9092"
     depends_on:
-      - zookeeper
-
+      zookeeper:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-c", "unset JMX_PORT; kafka-topics --bootstrap-server localhost:9092 --list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   # Microservices
   service-discovery:
-    build:
-      context: .
-      dockerfile: eureka-server/Dockerfile
+    image: tkiet2211/booking-eureka-server:develop-latest
     ports:
       - "8761:8761"
     environment:
@@ -59,19 +76,24 @@ services:
       - EUREKA_CLIENT_REGISTER_WITH_EUREKA=false
       - EUREKA_CLIENT_FETCH_REGISTRY=false
       - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-discovery:8761/eureka/
-
-
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
   auth-service:
-    build:
-      context: .
-      dockerfile: auth-service/Dockerfile
+    image: tkiet2211/booking-auth-service:develop-latest
     ports:
       - "8081:8081"
     depends_on:
-      - mysql
-      - redis
-      - service-discovery
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      service-discovery:
+        condition: service_healthy
     environment:
       - SERVER_PORT=8081
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/auth_booking?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=Asia/Ho_Chi_Minh
@@ -84,17 +106,24 @@ services:
       - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
       - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
 
   booking-service:
-    build:
-      context: .
-      dockerfile: booking-service/Dockerfile
+    image: tkiet2211/booking-booking-service:develop-latest
     ports:
       - "8082:8082"
     depends_on:
-      - kafka
-      - redis
-      - service-discovery
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      service-discovery:
+        condition: service_healthy
     environment:
       - SERVER_PORT=8082
       - SPRING_DATA_REDIS_HOST=redis
@@ -104,23 +133,28 @@ services:
       - EUREKA_CLIENT_FETCH_REGISTRY=true
       - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
       - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
-      # Fix MongoDB URI
       - SPRING_DATA_MONGODB_URI=mongodb+srv://tuankietcoder2211:kiet2211@booking-service.xoqbdpp.mongodb.net/booking-service?retryWrites=true&w=majority&appName=booking-service
-      # Add these for better connection handling
       - SPRING_DATA_MONGODB_SOCKET_TIMEOUT=10000
       - SPRING_DATA_MONGODB_CONNECT_TIMEOUT=10000
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
 
   payment-service:
-    build:
-      context: .
-      dockerfile: payment-service/Dockerfile
+    image: tkiet2211/booking-payment-service:develop-latest
     ports:
       - "8083:8083"
     depends_on:
-      - mysql
-      - kafka
-      - service-discovery
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      service-discovery:
+        condition: service_healthy
     env_file:
       - ./payment-service/.env
     environment:
@@ -136,16 +170,22 @@ services:
       - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
       - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
 
   notification-service:
-    build:
-      context: .
-      dockerfile: notification-service/Dockerfile
+    image: tkiet2211/booking-notification-service:develop-latest
     ports:
       - "8084:8084"
     depends_on:
-      - kafka
-      - service-discovery
+      kafka:
+        condition: service_healthy
+      service-discovery:
+        condition: service_healthy
     environment:
       - SERVER_PORT=8084
       - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
@@ -154,19 +194,28 @@ services:
       - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
       - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8084/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
 
   api-gateway:
-    build:
-      context: .
-      dockerfile: api-gateway/Dockerfile
+    image: tkiet2211/booking-api-gateway:develop-latest
     ports:
       - "8080:8080"
     depends_on:
-      - service-discovery
-      - auth-service
-      - booking-service
-      - payment-service
-      - notification-service
+      service-discovery:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      booking-service:
+        condition: service_healthy
+      payment-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
     environment:
       - SERVER_PORT=8080
       - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-discovery:8761/eureka/
@@ -174,8 +223,20 @@ services:
       - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
       - SPRING_CLOUD_GATEWAY_DISCOVERY_LOCATOR_ENABLED=true
       - SPRING_CLOUD_GATEWAY_DISCOVERY_LOCATOR_LOWER_CASE_SERVICE_ID=true
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
 
 volumes:
   mysql_data:
   redis_data:
+
+networks:
+  default:
+    name: booking-network

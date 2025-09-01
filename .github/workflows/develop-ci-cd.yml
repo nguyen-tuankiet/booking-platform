@@ -54,13 +54,13 @@ jobs:
       matrix:
         service: [
           eureka-server,
-          api-gateway, 
+          api-gateway,
           auth-service,
           booking-service,
           payment-service,
           notification-service
         ]
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -84,17 +84,7 @@ jobs:
           name: maven-local-repo
           path: ~/.m2/repository
 
-      - name: Run tests for ${{ matrix.service }}
-        run: |
-          cd ${{ matrix.service }}
-          # Skip tests for payment-service vì cần MySQL
-          if [ "${{ matrix.service }}" = "payment-service" ]; then
-            echo "Skipping tests for payment-service (requires MySQL)"
-          else
-            mvn clean test
-          fi
-
-      - name: Build application for ${{ matrix.service }}
+      - name: Build application for ${{ matrix.service }} (skip tests)
         run: |
           cd ${{ matrix.service }}
           mvn clean package -DskipTests

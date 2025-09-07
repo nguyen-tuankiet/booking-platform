@@ -22,6 +22,7 @@ public class SecurityConfig {
                                 "/api/auth/**",
                                 "/api/bookings/**",
                                 "/api/payments/**",
+                                "/api/notifications/**",
                                 "/debug/**"
                         ).permitAll()
                         .anyExchange().authenticated()

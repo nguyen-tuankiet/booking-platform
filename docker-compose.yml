@@ -146,6 +146,8 @@ services:
     depends_on:
       - kafka
       - service-discovery
+    env_file:
+      - ./notification-service/.env
     environment:
       - SERVER_PORT=8084
       - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092

@@ -72,6 +72,22 @@ public class GatewayConfig {
                         )
                         .uri("lb://payment-service")
                 )
+                // ===== Notification Service =====
+                .route("notification-service", r -> r
+                        .path("/api/notifications/**")
+                        .filters(f -> f
+                                .stripPrefix(2)
+                                .filter(jwtAuthenticationFilter.apply(new JwtAuthenticationFilter.Config()))
+                                .filter(rateLimitingFilter.apply(createRateLimitConfig(50,1)))
+                                .retry(retryConfig -> retryConfig
+                                        .setRetries(1)
+                                        .setMethods(HttpMethod.GET)
+                                        .setStatuses(HttpStatus.INTERNAL_SERVER_ERROR, HttpStatus.GATEWAY_TIMEOUT)
+                                        .setBackoff(Duration.ofMillis(200), Duration.ofMillis(800), 2, true)
+                                )
+                        )
+                        .uri("lb://notification-service")
+                )
 
                 .build();
     }

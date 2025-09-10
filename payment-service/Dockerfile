@@ -19,5 +19,5 @@ WORKDIR /app
 COPY --from=build /app/payment-service/target/payment-service-*.jar app.jar
 
 # Run application
-EXPOSE 8761
+EXPOSE 8083
 CMD ["java", "-jar", "app.jar"]

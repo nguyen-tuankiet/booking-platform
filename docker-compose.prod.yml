@@ -1,8 +1,7 @@
-
 version: '3.8'
 
 services:
-  # Databases
+  # Database MySQL
   mysql:
     image: mysql:8.0
     environment:
@@ -13,59 +12,30 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
     command: --default-authentication-plugin=mysql_native_password
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      timeout: 20s
-      retries: 10
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
 
+  # Redis
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
 
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.4.0
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "2181:2181"
-    healthcheck:
-      test: ["CMD", "bash", "-c", "echo 'ruok' | nc localhost 2181"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  kafka:
-    image: confluentinc/cp-kafka:7.4.0
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-    ports:
-      - "9092:9092"
-    depends_on:
-      zookeeper:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "bash", "-c", "unset JMX_PORT; kafka-topics --bootstrap-server localhost:9092 --list"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
-  # Microservices
+  # Eureka Service Discovery
   service-discovery:
     image: tkiet2211/booking-eureka-server:develop-latest
     ports:
@@ -75,25 +45,23 @@ services:
       - EUREKA_INSTANCE_HOSTNAME=service-discovery
       - EUREKA_CLIENT_REGISTER_WITH_EUREKA=false
       - EUREKA_CLIENT_FETCH_REGISTRY=false
-      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-discovery:8761/eureka/
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
 
+  # Auth Service
   auth-service:
     image: tkiet2211/booking-auth-service:develop-latest
     ports:
       - "8081:8081"
     depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      service-discovery:
-        condition: service_healthy
+      - mysql
+      - redis
+      - service-discovery
     environment:
       - SERVER_PORT=8081
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/auth_booking?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=Asia/Ho_Chi_Minh
@@ -106,116 +74,47 @@ services:
       - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
       - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 90s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
 
+  # Booking Service
   booking-service:
     image: tkiet2211/booking-booking-service:develop-latest
     ports:
       - "8082:8082"
     depends_on:
-      kafka:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      service-discovery:
-        condition: service_healthy
+      - redis
+      - service-discovery
     environment:
       - SERVER_PORT=8082
       - SPRING_DATA_REDIS_HOST=redis
       - SPRING_DATA_REDIS_PORT=6379
-      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-discovery:8761/eureka/
       - EUREKA_CLIENT_FETCH_REGISTRY=true
       - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
       - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
       - SPRING_DATA_MONGODB_URI=mongodb+srv://tuankietcoder2211:kiet2211@booking-service.xoqbdpp.mongodb.net/booking-service?retryWrites=true&w=majority&appName=booking-service
-      - SPRING_DATA_MONGODB_SOCKET_TIMEOUT=10000
-      - SPRING_DATA_MONGODB_CONNECT_TIMEOUT=10000
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 90s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
 
-  payment-service:
-    image: tkiet2211/booking-payment-service:develop-latest
-    ports:
-      - "8083:8083"
-    depends_on:
-      mysql:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-      service-discovery:
-        condition: service_healthy
-    env_file:
-      - ./payment-service/.env
-    environment:
-      - SERVER_PORT=8083
-      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/payment_service?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
-      - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=
-      - SPRING_DATA_REDIS_HOST=redis
-      - SPRING_DATA_REDIS_PORT=6379
-      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-discovery:8761/eureka/
-      - EUREKA_CLIENT_FETCH_REGISTRY=true
-      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
-      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8083/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 90s
-
-  notification-service:
-    image: tkiet2211/booking-notification-service:develop-latest
-    ports:
-      - "8084:8084"
-    depends_on:
-      kafka:
-        condition: service_healthy
-      service-discovery:
-        condition: service_healthy
-    environment:
-      - SERVER_PORT=8084
-      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-discovery:8761/eureka/
-      - EUREKA_CLIENT_FETCH_REGISTRY=true
-      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
-      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8084/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 90s
-
+  # API Gateway
   api-gateway:
-    image: tkiet2211/booking-api-gateway:develop-latest
+    image:  tkiet2211/booking-api-gateway:develop-latest
     ports:
       - "8080:8080"
     depends_on:
-      service-discovery:
-        condition: service_healthy
-      auth-service:
-        condition: service_healthy
-      booking-service:
-        condition: service_healthy
-      payment-service:
-        condition: service_healthy
-      notification-service:
-        condition: service_healthy
+      - service-discovery
+      - auth-service
+      - booking-service
     environment:
       - SERVER_PORT=8080
       - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://service-discovery:8761/eureka/
@@ -226,17 +125,13 @@ services:
       - SPRING_DATA_REDIS_HOST=redis
       - SPRING_DATA_REDIS_PORT=6379
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
 
 volumes:
   mysql_data:
   redis_data:
-
-networks:
-  default:
-    name: booking-network

@@ -44,12 +44,13 @@ jobs:
         with:
           name: maven-local-repo
           path: ~/.m2/repository
+        continue-on-error: true
 
       - name: Install common-library to local repository
         run: |
           cd common-library
           mvn clean install -DskipTests
-          
+
       - name: Upload Maven local repository
         uses: actions/upload-artifact@v4
         with:
@@ -65,7 +66,7 @@ jobs:
       matrix:
         service: [
           eureka-server,
-          api-gateway, 
+          api-gateway,
           auth-service,
           booking-service,
           payment-service,
@@ -91,17 +92,23 @@ jobs:
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
 
+      - name: Download Maven local repository
+        uses: actions/download-artifact@v4
+        with:
+          name: maven-local-repo
+          path: ~/.m2/repository
+
       - name: Run comprehensive tests for ${{ matrix.service }}
         run: |
           cd ${{ matrix.service }}
           # Run all tests including integration tests
           mvn clean verify -Pintegration-test
-          
+
       - name: Run code coverage
         run: |
           cd ${{ matrix.service }}
           mvn jacoco:report
-          
+
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
         with:
@@ -151,6 +158,12 @@ jobs:
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
 
+      - name: Download Maven local repository
+        uses: actions/download-artifact@v4
+        with:
+          name: maven-local-repo
+          path: ~/.m2/repository
+
       - name: Build and analyze with SonarCloud
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -171,7 +184,7 @@ jobs:
       matrix:
         service: [
           eureka-server,
-          api-gateway, 
+          api-gateway,
           auth-service,
           booking-service,
           payment-service,
@@ -218,7 +231,7 @@ jobs:
       matrix:
         service: [
           eureka-server,
-          api-gateway, 
+          api-gateway,
           auth-service,
           booking-service,
           payment-service,
@@ -262,7 +275,7 @@ jobs:
     needs: [security-scan-production]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    environment: 
+    environment:
       name: production
       url: https://your-production-domain.com
     
@@ -325,9 +338,9 @@ jobs:
           tag_name: ${{ github.ref_name }}
           release_name: Release ${{ github.ref_name }}
           body: |
-             **Production Release ${{ github.ref_name }}**
+            **Production Release ${{ github.ref_name }}**
             
-            ##  Docker Images
+            ## Docker Images
             - booking-eureka-server:${{ env.IMAGE_TAG }}
             - booking-api-gateway:${{ env.IMAGE_TAG }}
             - booking-auth-service:${{ env.IMAGE_TAG }}
@@ -335,14 +348,14 @@ jobs:
             - booking-payment-service:${{ env.IMAGE_TAG }}
             - booking-notification-service:${{ env.IMAGE_TAG }}
             
-            ##  Quality Gates
-             All tests passed
-             Security scan completed
-             Code quality approved
-             Manual approval granted
+            ## Quality Gates
+            - All tests passed
+            - Security scan completed
+            - Code quality approved
+            - Manual approval granted
             
-            ##  Deployment Instructions
-            Download `docker-compose-production-${{ env.IMAGE_TAG }}.yml` from release assets
+            ## Deployment Instructions
+            Download docker-compose-production-${{ env.IMAGE_TAG }}.yml from release assets
             ```bash
             docker-compose -f docker-compose-production-${{ env.IMAGE_TAG }}.yml up -d
             ```
@@ -351,10 +364,10 @@ jobs:
 
       - name: Production deployment completed
         run: |
-          echo " Production deployment completed successfully!"
-          echo " Version: ${{ env.IMAGE_TAG }}"
-          echo " All services are now running with production images"
-          echo " Monitor the deployment at: https://your-monitoring-url.com"
+          echo "🎉 Production deployment completed successfully!"
+          echo "Version: ${{ env.IMAGE_TAG }}"
+          echo "All services are now running with production images"
+          echo "Monitor the deployment at: https://your-monitoring-url.com"
 
   # Job 8: Post-deployment Health Check
   health-check:
@@ -368,8 +381,8 @@ jobs:
 
       - name: Health check notification
         run: |
-          echo  Post-deployment health checks should be performed"
-          echo " Verify the following:"
+          echo " Post-deployment health checks should be performed"
+          echo "Verify the following:"
           echo "   All services are responding"
           echo "   Database connections are healthy"
           echo "   External API integrations work"

@@ -182,7 +182,7 @@ Git
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/travel-booking-system.git
+git clone https://github.com/nguyen-tuankiet/booking-platform.git
 cd travel-booking-system
 
 # Start all services with Docker Compose
@@ -364,62 +364,6 @@ Throughput: 2,450 requests/second
 
 ---
 
-## 🛠️ Configuration
-
-### 🔧 **Environment Variables**
-
-```bash
-# Database Configuration
-DB_HOST=localhost
-DB_PORT=3306
-DB_NAME=travel_booking
-DB_USERNAME=booking_user
-DB_PASSWORD=secure_password
-
-# Redis Configuration  
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=redis_password
-
-# Kafka Configuration
-KAFKA_BOOTSTRAP_SERVERS=localhost:9092
-
-# JWT Configuration
-JWT_SECRET=your-super-secret-jwt-signing-key-here
-JWT_EXPIRATION=86400000
-```
-
-### 📁 **Configuration Files**
-
-```yaml
-# application.yml example
-server:
-  port: 8081
-
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/travel_booking
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
-  
-  data:
-    redis:
-      host: ${REDIS_HOST}
-      port: ${REDIS_PORT}
-  
-  kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
-
-eureka:
-  client:
-    service-url:
-      defaultZone: http://localhost:8761/eureka/
-```
-
----
 
 ## 🚀 Deployment
 
@@ -435,36 +379,6 @@ docker-compose -f docker-compose.prod.yml up -d
 # Scale specific services
 docker-compose up -d --scale booking-service=3 --scale payment-service=2
 ```
-
-### ☸️ **Kubernetes Deployment** (Optional)
-
-```yaml
-# k8s deployment example
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: auth-service
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: auth-service
-  template:
-    metadata:
-      labels:
-        app: auth-service
-    spec:
-      containers:
-      - name: auth-service
-        image: travel-booking/auth-service:latest
-        ports:
-        - containerPort: 8081
-        env:
-        - name: DB_HOST
-          value: "mysql-service"
-```
-
----
 
 ## 📈 Monitoring & Observability
 
@@ -503,7 +417,7 @@ curl http://localhost:8080/health/detailed
 
 ```bash
 # 1. Fork the repository
-git fork https://github.com/your-username/travel-booking-system.git
+git fork https://github.com/nguyen-tuankiet/booking-platform.git
 
 # 2. Create feature branch
 git checkout -b feature/amazing-new-feature
@@ -553,18 +467,11 @@ git push origin feature/amazing-new-feature
 
 ### 👨‍💻 **Author**
 
-**Your Name** - Senior Backend Engineer
-- 📧 Email: your.email@example.com
-- 💼 LinkedIn: [linkedin.com/in/yourprofile](https://linkedin.com/in/yourprofile)
-- 🐙 GitHub: [@yourusername](https://github.com/yourusername)
+**Your Name** - Backend Engineer
+- 📧 Email: tuankietcoder2211@gmail.com
+- 💼 LinkedIn: https://www.linkedin.com/in/ki%E1%BB%87t-nguy%E1%BB%85n-tu%E1%BA%A5n/
+- 🐙 GitHub: https://github.com/nguyen-tuankiet
 
-### 🆘 **Support**
-
-- 📖 Documentation: [Wiki](https://github.com/your-username/travel-booking-system/wiki)
-- 🐛 Bug Reports: [Issues](https://github.com/your-username/travel-booking-system/issues)
-- 💬 Discussions: [GitHub Discussions](https://github.com/your-username/travel-booking-system/discussions)
-
----
 
 ## 📄 License
 

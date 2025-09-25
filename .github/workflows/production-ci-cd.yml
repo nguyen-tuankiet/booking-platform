@@ -132,6 +132,17 @@ jobs:
   code-quality:
     needs: build-common-library
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: testpassword
+          MYSQL_DATABASE: booking_auth_test
+          MYSQL_USER: testuser
+          MYSQL_PASSWORD: testpassword
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -168,17 +179,23 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          # Test database configuration for SonarCloud analysis
+          SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/booking_auth_test
+          SPRING_DATASOURCE_USERNAME: testuser
+          SPRING_DATASOURCE_PASSWORD: testpassword
+          SPRING_PROFILES_ACTIVE: test
         run: |
           # Run SonarCloud analysis (requires SONAR_TOKEN secret)
           mvn clean verify sonar:sonar \
             -Dsonar.projectKey=booking-microservices \
             -Dsonar.organization=your-org \
             -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.login=$SONAR_TOKEN
+            -Dsonar.login=$SONAR_TOKEN \
+            -Dspring.profiles.active=test
 
   # Job 4: Build Production Docker Images
   docker-build-production:
-    needs: [comprehensive-tests, code-quality]
+    needs: [build-and-package, code-quality]
     runs-on: ubuntu-latest
     strategy:
       matrix:

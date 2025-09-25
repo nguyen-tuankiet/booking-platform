@@ -195,7 +195,7 @@ jobs:
 
   # Job 4: Build Production Docker Images
   docker-build-production:
-    needs: [build-and-package, code-quality]
+    needs: [comprehensive-tests, code-quality]
     runs-on: ubuntu-latest
     strategy:
       matrix:

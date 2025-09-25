@@ -50,7 +50,7 @@ jobs:
         run: |
           cd common-library
           mvn clean install -DskipTests
-          
+
       - name: Upload Maven local repository
         uses: actions/upload-artifact@v4
         with:
@@ -66,13 +66,13 @@ jobs:
       matrix:
         service: [
           eureka-server,
-          api-gateway, 
+          api-gateway,
           auth-service,
           booking-service,
           payment-service,
           notification-service
         ]
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -103,12 +103,12 @@ jobs:
           cd ${{ matrix.service }}
           # Run all tests including integration tests
           mvn clean verify -Pintegration-test
-          
+
       - name: Run code coverage
         run: |
           cd ${{ matrix.service }}
           mvn jacoco:report
-          
+
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
         with:
@@ -175,15 +175,6 @@ jobs:
           name: maven-local-repo
           path: ~/.m2/repository
 
-      - name: Wait for MySQL to be ready
-        run: |
-          echo "Waiting for MySQL to be ready..."
-          until mysqladmin ping -h"127.0.0.1" -P3306 -u root -ptestpassword --silent; do
-            echo "Waiting for MySQL..."
-            sleep 2
-          done
-          echo "MySQL is ready!"
-
       - name: Build and analyze with SonarCloud
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -210,13 +201,13 @@ jobs:
       matrix:
         service: [
           eureka-server,
-          api-gateway, 
+          api-gateway,
           auth-service,
           booking-service,
           payment-service,
           notification-service
         ]
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -257,13 +248,13 @@ jobs:
       matrix:
         service: [
           eureka-server,
-          api-gateway, 
+          api-gateway,
           auth-service,
           booking-service,
           payment-service,
           notification-service
         ]
-    
+
     steps:
       - name: Run comprehensive Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
@@ -301,10 +292,10 @@ jobs:
     needs: [security-scan-production]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    environment: 
+    environment:
       name: production
       url: https://your-production-domain.com
-    
+
     steps:
       - name: Manual approval checkpoint
         run: |
@@ -318,7 +309,7 @@ jobs:
     needs: [approval]
     runs-on: ubuntu-latest
     environment: production
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -400,7 +391,7 @@ jobs:
     needs: [deploy-production]
     runs-on: ubuntu-latest
     if: always()
-    
+
     steps:
       - name: Wait for services to start
         run: sleep 60
@@ -420,7 +411,7 @@ jobs:
     needs: [deploy-production]
     runs-on: ubuntu-latest
     if: failure()
-    
+
     steps:
       - name: Rollback instructions
         run: |
